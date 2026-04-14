@@ -316,9 +316,12 @@ a.nav-btn { text-decoration: none; }
 .type-tab.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
 
 /* Badge de tipo na lista de conversas */
-.conv-type-badge { padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.conv-type-badge { padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; transition: opacity .15s, transform .1s; }
 .conv-type-badge.inbound    { background: rgba(96,165,250,.12); color: #60a5fa; }
 .conv-type-badge.prospecting { background: rgba(52,211,153,.12); color: #34d39a; }
+.conv-type-badge.clickable  { cursor: pointer; }
+.conv-type-badge.clickable:hover { opacity: .75; }
+.conv-type-badge.clickable:active { transform: scale(.93); }
 
 .sidebar-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 

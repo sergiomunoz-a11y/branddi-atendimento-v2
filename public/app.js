@@ -659,30 +659,31 @@ function renderLeadPanel(conv) {
         compEl.style.display = lead.company_name ? '' : 'none';
     }
 
-    // Badge de tipo + seletor (Admin pode mudar)
+    // Badge de tipo — clicável para Admin (alterna inbound/prospecting)
     const typeBadge = document.getElementById('lp-type-badge');
     if (typeBadge) {
-        typeBadge.textContent  = typeLabel;
-        typeBadge.className    = `conv-type-badge ${convType}`;
-    }
+        const labels = { inbound: 'Inbound', prospecting: 'Prospeccao' };
+        typeBadge.textContent = labels[convType] || convType;
+        typeBadge.className = `conv-type-badge ${convType}`;
 
-    const typeSelect = document.getElementById('lp-type-select');
-    if (typeSelect) {
         if (currentUser?.role === 'Admin') {
-            typeSelect.style.display = '';
-            typeSelect.value = convType;
-            typeSelect.onchange = async () => {
+            typeBadge.classList.add('clickable');
+            typeBadge.title = 'Clique para alterar tipo';
+            typeBadge.onclick = async () => {
+                const newType = convType === 'inbound' ? 'prospecting' : 'inbound';
                 await apiFetch(`/api/inbox/${conv.id}/type`, {
                     method: 'PATCH',
-                    body: JSON.stringify({ type: typeSelect.value }),
+                    body: JSON.stringify({ type: newType }),
                 });
-                conv.type = typeSelect.value;
+                conv.type = newType;
                 renderLeadPanel(conv);
                 loadInbox();
-                toast('Tipo de conversa atualizado', 'success');
+                toast(`Tipo alterado para ${labels[newType]}`, 'success');
             };
         } else {
-            typeSelect.style.display = 'none';
+            typeBadge.classList.remove('clickable');
+            typeBadge.onclick = null;
+            typeBadge.title = '';
         }
     }
 
