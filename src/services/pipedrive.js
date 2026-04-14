@@ -107,6 +107,27 @@ export async function createWhatsAppActivity({ dealId, personId, subject, transc
     return res.data || null;
 }
 
+// ─── Deals for Person ────────────────────────────────────────────────
+
+export async function getDealsForPerson(personId) {
+    const res = await pdGet(`/persons/${personId}/deals?status=all_not_deleted&limit=100`);
+    return res.data || [];
+}
+
+export async function findPersonWithDeals(phone) {
+    const term = phone.replace(/\D/g, '').slice(-9);
+    const res = await pdGet(`/persons/search?term=${term}&fields=phone&limit=5`);
+    const items = res.data?.items || [];
+
+    const results = [];
+    for (const item of items) {
+        const person = item.item;
+        const deals = await getDealsForPerson(person.id);
+        results.push({ person, deals });
+    }
+    return results;
+}
+
 // ─── Pipelines ────────────────────────────────────────────────────────
 
 export async function getPipelines() {

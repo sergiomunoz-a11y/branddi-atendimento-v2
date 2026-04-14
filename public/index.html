@@ -175,26 +175,21 @@
                     <div class="lp-tags" id="lp-tags">—</div>
                 </div>
 
-                <!-- Deal vinculado no Pipedrive -->
+                <!-- Deals vinculados no Pipedrive (deal picker) -->
                 <div class="lp-section lp-deal-section" id="lp-deal-section">
-                    <div class="lp-section-title">Deal no Pipedrive</div>
+                    <div class="lp-section-title">Deals no Pipedrive</div>
                     <div id="lp-deal-content">
                         <div class="lp-deal-loading" id="lp-deal-loading" style="display:none">
-                            <span class="lp-muted">Buscando deal...</span>
+                            <span class="lp-muted">Buscando deals...</span>
                         </div>
-                        <div id="lp-deal-found" style="display:none">
-                            <div class="lp-deal-card" id="lp-deal-card">
-                                <div class="lp-deal-title" id="lp-deal-title">—</div>
-                                <div class="lp-deal-meta">
-                                    <span class="lp-deal-stage" id="lp-deal-stage">—</span>
-                                </div>
-                                <a class="lp-deal-link" id="lp-deal-link" href="#" target="_blank">
-                                    🔗 Ver no Pipedrive
-                                </a>
+                        <div class="deal-picker" id="lp-deal-picker" style="display:none">
+                            <div class="deal-picker-hint lp-muted" id="lp-deal-hint">Selecione o deal para registrar atividades:</div>
+                            <div class="deal-picker-list" id="lp-deal-list">
+                                <!-- Deals renderizados via JS -->
                             </div>
                         </div>
                         <div id="lp-deal-notfound" style="display:none">
-                            <p class="lp-muted">Nenhum deal vinculado.</p>
+                            <p class="lp-muted">Nenhum deal vinculado a este número.</p>
                             <button class="btn-sm btn-primary" id="btn-create-deal-lp">
                                 + Criar deal
                             </button>
@@ -218,9 +213,10 @@
                     </div>
                 </div>
 
-                <!-- Atividades Pipedrive -->
+                <!-- Atividades Pipedrive (aparece quando deal selecionado) -->
                 <div class="lp-section" id="lp-activities-section" style="display:none">
                     <div class="lp-section-title">Registrar atividade</div>
+                    <div class="lp-selected-deal-info" id="lp-selected-deal-info"></div>
                     <button class="btn-sm btn-outline lp-act-btn" id="btn-act-whatsapp">
                         📱 Transcricao WhatsApp
                     </button>

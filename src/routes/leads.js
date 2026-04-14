@@ -8,7 +8,8 @@ import {
 } from '../services/supabase.js';
 import { queueLeadSync } from '../services/crm-sync.js';
 import {
-    createPerson, findPersonByPhone, findOrCreateOrg, createDeal
+    createPerson, findPersonByPhone, findOrCreateOrg, createDeal,
+    findPersonWithDeals, pdGet
 } from '../services/pipedrive.js';
 import { validate } from '../middleware/validate.js';
 
@@ -198,6 +199,58 @@ router.get('/history/:convId/messages', async (req, res) => {
     }
 });
 
+// ─── GET /api/leads/:id/deals — Todos os deals vinculados ao telefone ─
+router.get('/leads/:id/deals', async (req, res) => {
+    try {
+        const lead = await getLeadById(req.params.id);
+        if (!lead) return res.status(404).json({ error: 'Lead não encontrado' });
+        if (!lead.phone) return res.json({ deals: [], persons: [] });
+
+        const pipedriveDomain = process.env.PIPEDRIVE_DOMAIN || 'app.pipedrive.com';
+        const results = await findPersonWithDeals(lead.phone);
+
+        const allDeals = [];
+        const persons = [];
+
+        for (const { person, deals } of results) {
+            persons.push({
+                id: person.id,
+                name: person.name,
+                phone: person.phones?.[0] || lead.phone,
+            });
+
+            for (const d of deals) {
+                // Busca nome do stage
+                let stage_name = '—';
+                if (d.stage_id) {
+                    try {
+                        const stageData = await pdGet(`/stages/${d.stage_id}`);
+                        stage_name = stageData?.data?.name || '—';
+                    } catch { /* ignora */ }
+                }
+
+                allDeals.push({
+                    id: d.id,
+                    title: d.title,
+                    status: d.status,
+                    stage_name,
+                    pipeline_id: d.pipeline_id,
+                    value: d.value,
+                    currency: d.currency,
+                    owner_name: d.owner_name || '—',
+                    person_id: person.id,
+                    person_name: person.name,
+                    link: `https://${pipedriveDomain}/deal/${d.id}`,
+                });
+            }
+        }
+
+        res.json({ deals: allDeals, persons });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── GET /api/leads/:id/deal — Busca deal do Pipedrive ───────────────
 router.get('/leads/:id/deal', async (req, res) => {
     try {
@@ -246,11 +299,13 @@ router.get('/leads/:id/deal', async (req, res) => {
 });
 
 // ─── POST /api/leads/:id/activities/whatsapp — Cria atividade WhatsApp
+// Aceita deal_id explícito no body (deal picker) ou fallback para lead.crm_deal_id
 router.post('/leads/:id/activities/whatsapp', async (req, res) => {
     try {
-        const { conversation_id } = req.body;
+        const { conversation_id, deal_id } = req.body;
         const lead = await getLeadById(req.params.id);
-        if (!lead?.crm_deal_id) return res.status(400).json({ error: 'Lead sem deal no Pipedrive' });
+        const targetDealId = deal_id || lead?.crm_deal_id;
+        if (!targetDealId) return res.status(400).json({ error: 'Nenhum deal selecionado' });
 
         // Busca mensagens da conversa
         const msgs = conversation_id ? await getMessages(conversation_id, { limit: 200 }) : [];
@@ -274,8 +329,8 @@ router.post('/leads/:id/activities/whatsapp', async (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 subject:  `WhatsApp — ${lead.name || lead.phone} — ${dateStr}`,
-                type:     'call', // fallback; idealmente 'whatsapp' se configurado
-                deal_id:   lead.crm_deal_id,
+                type:     'call',
+                deal_id:   parseInt(targetDealId),
                 due_date:  dateStr,
                 due_time:  timeStr,
                 done:      1,
@@ -284,18 +339,33 @@ router.post('/leads/:id/activities/whatsapp', async (req, res) => {
             }),
         });
 
-        res.json({ ok: true });
+        res.json({ ok: true, deal_id: targetDealId });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 // ─── POST /api/leads/:id/activities/reply — Cria atividade de Resposta
+// Aceita deal_id explícito no body (deal picker) ou fallback para lead.crm_deal_id
 router.post('/leads/:id/activities/reply', async (req, res) => {
     try {
-        const { content } = req.body;
+        const { content, deal_id, conversation_id } = req.body;
         const lead = await getLeadById(req.params.id);
-        if (!lead?.crm_deal_id) return res.status(400).json({ error: 'Lead sem deal no Pipedrive' });
+        const targetDealId = deal_id || lead?.crm_deal_id;
+        if (!targetDealId) return res.status(400).json({ error: 'Nenhum deal selecionado' });
+
+        // Se não vier content explícito, busca última mensagem inbound da conversa
+        let replyContent = content;
+        if (!replyContent && conversation_id) {
+            const msgs = await getMessages(conversation_id, { limit: 200 });
+            const inboundMsgs = msgs.filter(m => m.direction === 'inbound');
+            replyContent = inboundMsgs
+                .map(m => {
+                    const time = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    return `[${time}] ${lead.name || 'Lead'}: ${m.content || '(mídia)'}`;
+                })
+                .join('\n');
+        }
 
         const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
         const now  = new Date();
@@ -307,15 +377,15 @@ router.post('/leads/:id/activities/reply', async (req, res) => {
             body: JSON.stringify({
                 subject:  `Resposta recebida — ${lead.name || lead.phone}`,
                 type:     'email',
-                deal_id:   lead.crm_deal_id,
+                deal_id:   parseInt(targetDealId),
                 due_date:  dateStr,
                 done:      1,
-                note:      content || '(sem conteúdo)',
+                note:      replyContent || '(sem conteúdo)',
                 user_id:   req.user?.pipedrive_user_id || undefined,
             }),
         });
 
-        res.json({ ok: true });
+        res.json({ ok: true, deal_id: targetDealId });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -13,6 +13,7 @@ let allConversations = [];
 let currentFilter = 'all';
 let allScripts = [];
 let currentScriptCat = '';
+let selectedDealId = null; // Deal selecionado no deal picker
 
 // --- Auth State ---
 let currentUser = null;
@@ -685,19 +686,13 @@ function renderLeadPanel(conv) {
         }
     }
 
-    // Busca deal no Pipedrive se tiver crm_deal_id
-    loadDealForLead(lead, conv.id);
+    // Busca TODOS os deals vinculados ao telefone no Pipedrive
+    selectedDealId = null;
+    loadDealsForLead(lead, conv);
 
-    // Botoes de atividade visiveis apenas se houver deal
+    // Atividades ficam escondidas até um deal ser selecionado
     const actSection = document.getElementById('lp-activities-section');
-    if (actSection) {
-        if (lead.crm_deal_id) {
-            actSection.style.display = '';
-            setupActivityButtons(conv, lead);
-        } else {
-            actSection.style.display = 'none';
-        }
-    }
+    if (actSection) actSection.style.display = 'none';
 
     // Botao criar deal
     const btnCreateDeal = document.getElementById('btn-create-deal-lp');
@@ -811,38 +806,89 @@ async function syncLeadPanelPipedrive(leadId, convId) {
     }
 }
 
-async function loadDealForLead(lead, convId) {
+async function loadDealsForLead(lead, conv) {
     const loading  = document.getElementById('lp-deal-loading');
-    const found    = document.getElementById('lp-deal-found');
+    const picker   = document.getElementById('lp-deal-picker');
     const notfound = document.getElementById('lp-deal-notfound');
+    const listEl   = document.getElementById('lp-deal-list');
 
     if (loading) loading.style.display  = '';
-    if (found) found.style.display    = 'none';
+    if (picker) picker.style.display    = 'none';
     if (notfound) notfound.style.display = 'none';
 
     try {
-        if (lead.crm_deal_id) {
-            const data = await apiFetch(`/api/leads/${lead.id}/deal`);
-            if (data?.deal) {
-                const d = data.deal;
-                const titleEl = document.getElementById('lp-deal-title');
-                if (titleEl) titleEl.textContent = d.title || '—';
-                const stageEl = document.getElementById('lp-deal-stage');
-                if (stageEl) stageEl.textContent = d.stage_name || '—';
-                const linkEl = document.getElementById('lp-deal-link');
-                if (linkEl) linkEl.href = d.link || '#';
-                if (found) found.style.display = '';
-            } else {
-                if (notfound) notfound.style.display = '';
-            }
-        } else {
+        const data = await apiFetch(`/api/leads/${lead.id}/deals`);
+        const deals = data?.deals || [];
+
+        if (deals.length === 0) {
             if (notfound) notfound.style.display = '';
+            return;
+        }
+
+        // Renderiza lista de deals como cards clicáveis
+        if (listEl) {
+            listEl.innerHTML = deals.map(d => {
+                const statusBadge = d.status === 'won' ? 'deal-won'
+                    : d.status === 'lost' ? 'deal-lost' : 'deal-open';
+                return `
+                    <div class="deal-picker-item" data-deal-id="${d.id}" data-deal-title="${escHtml(d.title)}">
+                        <div class="deal-picker-radio"></div>
+                        <div class="deal-picker-info">
+                            <div class="deal-picker-title">${escHtml(d.title)}</div>
+                            <div class="deal-picker-meta">
+                                <span class="deal-stage-badge">${escHtml(d.stage_name)}</span>
+                                <span class="deal-status-badge ${statusBadge}">${d.status}</span>
+                            </div>
+                            ${d.person_name ? `<div class="deal-picker-person">${escHtml(d.person_name)}</div>` : ''}
+                        </div>
+                        <a href="${d.link}" target="_blank" class="deal-picker-link" title="Ver no Pipedrive" onclick="event.stopPropagation()">↗</a>
+                    </div>`;
+            }).join('');
+
+            // Event delegation para seleção de deal
+            listEl.onclick = (e) => {
+                const item = e.target.closest('.deal-picker-item');
+                if (!item) return;
+                selectDeal(item, lead, conv);
+            };
+        }
+
+        if (picker) picker.style.display = '';
+
+        // Auto-seleciona se só tem 1 deal, ou se lead.crm_deal_id bate com um deal
+        if (deals.length === 1) {
+            const firstItem = listEl?.querySelector('.deal-picker-item');
+            if (firstItem) selectDeal(firstItem, lead, conv);
+        } else if (lead.crm_deal_id) {
+            const matchItem = listEl?.querySelector(`[data-deal-id="${lead.crm_deal_id}"]`);
+            if (matchItem) selectDeal(matchItem, lead, conv);
         }
     } catch {
         if (notfound) notfound.style.display = '';
     } finally {
         if (loading) loading.style.display = 'none';
     }
+}
+
+function selectDeal(itemEl, lead, conv) {
+    const listEl = document.getElementById('lp-deal-list');
+    if (listEl) {
+        listEl.querySelectorAll('.deal-picker-item').forEach(el => el.classList.remove('selected'));
+    }
+    itemEl.classList.add('selected');
+
+    selectedDealId = itemEl.dataset.dealId;
+    const dealTitle = itemEl.dataset.dealTitle;
+
+    // Mostra seção de atividades
+    const actSection = document.getElementById('lp-activities-section');
+    if (actSection) actSection.style.display = '';
+
+    // Info do deal selecionado
+    const infoEl = document.getElementById('lp-selected-deal-info');
+    if (infoEl) infoEl.innerHTML = `<span class="lp-muted">Deal:</span> <strong>#${selectedDealId}</strong> — ${escHtml(dealTitle)}`;
+
+    setupActivityButtons(conv, lead);
 }
 
 function setupActivityButtons(conv, lead) {
@@ -854,31 +900,32 @@ function setupActivityButtons(conv, lead) {
 }
 
 async function createWhatsAppActivity(conv, lead) {
+    if (!selectedDealId) {
+        toast('Selecione um deal primeiro', 'warning');
+        return;
+    }
     try {
         await apiFetch(`/api/leads/${lead.id}/activities/whatsapp`, {
             method: 'POST',
-            body: JSON.stringify({ conversation_id: conv.id }),
+            body: JSON.stringify({ conversation_id: conv.id, deal_id: selectedDealId }),
         });
-        toast('Atividade WhatsApp criada no Pipedrive!', 'success');
+        toast(`Atividade WhatsApp criada no Deal #${selectedDealId}!`, 'success');
     } catch (err) {
         toast(`Erro: ${err.message}`, 'error');
     }
 }
 
 async function createReplyActivity(conv, lead) {
-    const lastInbound = conv.last_message?.direction === 'inbound'
-        ? conv.last_message
-        : null;
-    if (!lastInbound) {
-        toast('Nao ha resposta recente do lead para registrar', 'warning');
+    if (!selectedDealId) {
+        toast('Selecione um deal primeiro', 'warning');
         return;
     }
     try {
         await apiFetch(`/api/leads/${lead.id}/activities/reply`, {
             method: 'POST',
-            body: JSON.stringify({ content: lastInbound.content, conversation_id: conv.id }),
+            body: JSON.stringify({ conversation_id: conv.id, deal_id: selectedDealId }),
         });
-        toast('Resposta registrada no Pipedrive!', 'success');
+        toast(`Resposta registrada no Deal #${selectedDealId}!`, 'success');
     } catch (err) {
         toast(`Erro: ${err.message}`, 'error');
     }
