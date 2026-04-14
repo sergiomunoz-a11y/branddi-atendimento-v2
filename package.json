@@ -1,0 +1,34 @@
+{
+    "name": "branddi-atendimento-v2",
+    "version": "2.0.0",
+    "description": "Branddi WhatsApp Atendimento Platform v2 — Inbox inteligente, chatbot de triagem e sync com CRM",
+    "type": "module",
+    "main": "src/server.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "dev": "node --watch src/server.js"
+    },
+    "engines": {
+        "node": ">=20.0.0",
+        "npm": ">=10.0.0"
+    },
+    "keywords": [
+        "whatsapp",
+        "atendimento",
+        "crm",
+        "chatbot",
+        "branddi"
+    ],
+    "license": "UNLICENSED",
+    "dependencies": {
+        "@supabase/supabase-js": "^2.99.2",
+        "bcryptjs": "^3.0.3",
+        "compression": "^1.8.1",
+        "cookie-parser": "^1.4.7",
+        "cors": "^2.8.6",
+        "dotenv": "^16.4.0",
+        "express": "^5.2.1",
+        "express-rate-limit": "^7.1.5",
+        "jsonwebtoken": "^9.0.3"
+    }
+}

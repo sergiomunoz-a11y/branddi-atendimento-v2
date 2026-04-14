@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador do Bot — Branddi</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0f1a;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: #111827;
+            border-bottom: 1px solid #1f2937;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 { font-size: 16px; color: #00d4aa; }
+        .header .subtitle { font-size: 12px; color: #6b7280; margin-left: 8px; }
+        .header-actions { display: flex; gap: 8px; }
+        .header-actions button {
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid #374151;
+            background: #1f2937;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .header-actions button:hover { background: #374151; }
+        .header-actions button.primary { background: #00d4aa; color: #000; border-color: #00d4aa; font-weight: 600; }
+        .header-actions button.primary:hover { background: #00b894; }
+
+        /* Layout */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Chat area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* ─── Phrases Editor Panel ──────────────────────────── */
+        .phrases-panel {
+            width: 420px;
+            background: #111827;
+            border-left: 1px solid #1f2937;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+            transition: width .3s ease;
+        }
+        .phrases-panel.collapsed { width: 0; border: none; }
+        .phrases-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #1f2937;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .phrases-header h3 { font-size: 14px; color: #00d4aa; }
+        .phrases-header-actions { display: flex; gap: 6px; }
+        .phrases-header-actions button {
+            padding: 4px 10px;
+            border-radius: 5px;
+            border: 1px solid #374151;
+            background: #1f2937;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .phrases-header-actions button:hover { background: #374151; color: #e0e0e0; }
+        .phrases-header-actions button.save { background: #00d4aa; color: #000; border-color: #00d4aa; font-weight: 600; }
+        .phrases-header-actions button.save:hover { background: #00b894; }
+
+        .phrases-tabs {
+            display: flex;
+            gap: 2px;
+            padding: 8px 16px;
+            border-bottom: 1px solid #1f2937;
+            flex-shrink: 0;
+            overflow-x: auto;
+        }
+        .phrases-tab {
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: #6b7280;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .phrases-tab:hover { color: #e0e0e0; background: #1f2937; }
+        .phrases-tab.active { background: #00d4aa22; color: #00d4aa; border-color: #00d4aa44; }
+
+        .phrases-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .phrase-item { display: flex; flex-direction: column; gap: 4px; }
+        .phrase-item.hidden { display: none; }
+        .phrase-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .phrase-edited-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #f59e0b;
+            display: none;
+        }
+        .phrase-item.edited .phrase-edited-dot { display: inline-block; }
+        .phrase-textarea {
+            width: 100%;
+            min-height: 60px;
+            max-height: 200px;
+            resize: vertical;
+            background: #1a1f2e;
+            border: 1px solid #2d3548;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 12px;
+            font-family: inherit;
+            padding: 8px 10px;
+            line-height: 1.5;
+            transition: border-color .2s;
+        }
+        .phrase-textarea:focus { outline: none; border-color: #00d4aa; }
+        .phrase-textarea.edited { border-color: #f59e0b55; }
+        .phrase-reset-btn {
+            align-self: flex-end;
+            padding: 2px 8px;
+            font-size: 10px;
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .phrase-reset-btn:hover { color: #f87171; background: #f8717111; }
+        .phrase-vars {
+            font-size: 10px;
+            color: #4b5563;
+            font-style: italic;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Messages */
+        .msg {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .msg.bot {
+            align-self: flex-start;
+            background: #1f2937;
+            border-bottom-left-radius: 4px;
+        }
+        .msg.lead {
+            align-self: flex-end;
+            background: #00d4aa;
+            color: #000;
+            border-bottom-right-radius: 4px;
+        }
+        .msg.system {
+            align-self: center;
+            background: #1a1a2e;
+            border: 1px solid #374151;
+            color: #9ca3af;
+            font-size: 12px;
+            max-width: 90%;
+            border-radius: 8px;
+        }
+        .msg .sender {
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #00d4aa;
+        }
+        .msg.lead .sender { color: #065f46; }
+        .msg.system .sender { color: #6366f1; }
+        .msg .time { font-size: 10px; color: #6b7280; margin-top: 4px; text-align: right; }
+        .msg.lead .time { color: #065f46; }
+
+        /* Typing indicator */
+        .msg.typing-indicator {
+            opacity: .7;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+        .typing-dots span {
+            animation: typingBlink 1.4s infinite;
+            font-weight: 700;
+            font-size: 18px;
+            line-height: 1;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: .2s; }
+        .typing-dots span:nth-child(3) { animation-delay: .4s; }
+        @keyframes typingBlink { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
+
+        /* Debug info */
+        .debug-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-top: 6px;
+            margin-right: 4px;
+        }
+        .debug-badge.intent { background: #1e3a5f; color: #60a5fa; }
+        .debug-badge.faq { background: #1a3a2a; color: #34d399; }
+        .debug-badge.sentiment { background: #3b1a1a; color: #f87171; }
+        .debug-badge.sentiment.positive { background: #1a3b1a; color: #4ade80; }
+        .debug-badge.sentiment.neutral { background: #1f2937; color: #9ca3af; }
+        .debug-badge.entity { background: #2d1b4e; color: #a78bfa; }
+        .debug-badge.action { background: #1f2937; color: #fbbf24; }
+        .debug-badge.priority { background: #4a1d1d; color: #fb923c; }
+
+        /* Input area */
+        .input-area {
+            padding: 12px 20px;
+            border-top: 1px solid #1f2937;
+            background: #111827;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 24px;
+            border: 1px solid #374151;
+            background: #1f2937;
+            color: #e0e0e0;
+            font-size: 14px;
+            outline: none;
+        }
+        .input-area input:focus { border-color: #00d4aa; }
+        .input-area input::placeholder { color: #6b7280; }
+        .input-area button.send {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: #00d4aa;
+            color: #000;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .input-area button.send:hover { background: #00b894; }
+        .input-area button.send:disabled { opacity: 0.5; cursor: not-allowed; }
+        .media-btns { display: flex; gap: 4px; }
+        .media-btns button {
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            background: transparent;
+            color: #6b7280;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .media-btns button:hover { background: #1f2937; color: #e0e0e0; }
+
+        /* Stage indicator */
+        .stage-bar {
+            padding: 6px 20px;
+            background: #111827;
+            border-bottom: 1px solid #1f2937;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 12px;
+        }
+        .stage-step {
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: #1f2937;
+            color: #6b7280;
+        }
+        .stage-step.active { background: #00d4aa; color: #000; font-weight: 600; }
+        .stage-step.done { background: #065f46; color: #34d399; }
+
+        /* Setup modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal {
+            background: #1f2937;
+            border-radius: 16px;
+            padding: 28px;
+            width: 400px;
+            border: 1px solid #374151;
+        }
+        .modal h2 { font-size: 18px; color: #00d4aa; margin-bottom: 16px; }
+        .modal label { font-size: 13px; color: #9ca3af; display: block; margin-bottom: 4px; margin-top: 12px; }
+        .modal input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            background: #111827;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .modal .modal-actions { margin-top: 20px; display: flex; gap: 8px; justify-content: flex-end; }
+        .modal .modal-actions button {
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            border: none;
+        }
+        .modal .btn-start { background: #00d4aa; color: #000; font-weight: 600; }
+        .modal .btn-skip { background: #374151; color: #e0e0e0; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+
+        .ended-banner {
+            text-align: center;
+            padding: 12px;
+            background: #065f46;
+            color: #34d399;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 8px;
+            margin: 8px 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <h1>🤖 Simulador do Bot Branddi</h1>
+            <span class="subtitle">Teste conversas sem WhatsApp</span>
+        </div>
+        <div class="header-actions">
+            <button onclick="showDebug = !showDebug; document.querySelectorAll('.debug-info').forEach(d => d.style.display = showDebug ? 'block' : 'none')">
+                🔍 Debug
+            </button>
+            <button onclick="togglePhrases()" id="btn-phrases">✏️ Frases</button>
+            <button class="primary" onclick="newConversation()">+ Nova Conversa</button>
+        </div>
+    </div>
+
+    <div class="stage-bar" id="stage-bar">
+        <span class="stage-step active" data-stage="qualifying">1. Qualificação</span>
+        <span class="stage-step" data-stage="ask_company">2. Empresa</span>
+        <span class="stage-step" data-stage="ask_domain">3. Domínio</span>
+        <span class="stage-step" data-stage="ask_context">4. Contexto</span>
+        <span class="stage-step" data-stage="human">5. Handoff</span>
+    </div>
+
+    <div class="container">
+        <div class="chat-area">
+            <div class="chat-messages" id="chat-messages"></div>
+            <div id="ended-banner" class="ended-banner" style="display:none">
+                ✅ Conversa finalizada — Bot fez handoff para humano
+            </div>
+            <div class="input-area">
+                <div class="media-btns">
+                    <button onclick="sendMedia('audio')" title="Simular áudio">🎤</button>
+                    <button onclick="sendMedia('image')" title="Simular imagem">📸</button>
+                </div>
+                <input type="text" id="msg-input" placeholder="Digite como se fosse o lead..."
+                       onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMsg(); }">
+                <button class="send" onclick="sendMsg()" id="send-btn">▶</button>
+            </div>
+        </div>
+
+        <!-- Phrases Editor Panel -->
+        <div class="phrases-panel collapsed" id="phrases-panel">
+            <div class="phrases-header">
+                <h3>✏️ Frases do Bot</h3>
+                <div class="phrases-header-actions">
+                    <button onclick="resetAllPhrases()">↩ Reset</button>
+                    <button class="save" onclick="savePhrases()">💾 Salvar</button>
+                </div>
+            </div>
+            <div class="phrases-tabs" id="phrases-tabs">
+                <button class="phrases-tab active" data-cat="flow" onclick="filterPhrases('flow')">🔄 Fluxo</button>
+                <button class="phrases-tab" data-cat="retry" onclick="filterPhrases('retry')">🔁 Retries</button>
+                <button class="phrases-tab" data-cat="media" onclick="filterPhrases('media')">📎 Mídia</button>
+                <button class="phrases-tab" data-cat="faq" onclick="filterPhrases('faq')">❓ FAQs</button>
+                <button class="phrases-tab" data-cat="all" onclick="filterPhrases('all')">Todas</button>
+            </div>
+            <div class="phrases-list" id="phrases-list"></div>
+        </div>
+    </div>
+
+    <!-- Setup Modal -->
+    <div class="modal-overlay" id="setup-modal">
+        <div class="modal">
+            <h2>🤖 Nova Conversa Simulada</h2>
+            <p style="font-size:13px;color:#9ca3af;margin-bottom:8px;">
+                Configure o lead para iniciar. Campos opcionais.
+            </p>
+            <label>Nome do Lead</label>
+            <input type="text" id="setup-name" placeholder="Ex: João Silva">
+            <label>Telefone</label>
+            <input type="text" id="setup-phone" placeholder="Ex: 11999998888">
+            <label>Email</label>
+            <input type="text" id="setup-email" placeholder="Ex: joao@empresa.com">
+            <div class="modal-actions">
+                <button class="btn-skip" onclick="startConversation()">Pular (anônimo)</button>
+                <button class="btn-start" onclick="startConversation()">Iniciar ▶</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let showDebug = false;
+        const stages = ['qualifying', 'ask_company', 'ask_domain', 'ask_context', 'human'];
+        const chatEl = document.getElementById('chat-messages');
+
+        function newConversation() {
+            document.getElementById('setup-modal').classList.remove('hidden');
+            document.getElementById('setup-name').value = '';
+            document.getElementById('setup-phone').value = '';
+            document.getElementById('setup-email').value = '';
+            document.getElementById('setup-name').focus();
+            document.getElementById('ended-banner').style.display = 'none';
+            document.getElementById('msg-input').disabled = false;
+            document.getElementById('send-btn').disabled = false;
+        }
+
+        async function startConversation() {
+            const name = document.getElementById('setup-name').value.trim();
+            const phone = document.getElementById('setup-phone').value.trim();
+            const email = document.getElementById('setup-email').value.trim();
+
+            document.getElementById('setup-modal').classList.add('hidden');
+            chatEl.innerHTML = '';
+            updateStage('qualifying');
+
+            try {
+                const res = await fetch('/api/simulate/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ leadName: name || null, leadPhone: phone || null, leadEmail: email || null }),
+                });
+                const data = await res.json();
+                sessionId = data.sessionId;
+
+                for (const msg of data.botMessages) {
+                    addMessage('bot', msg);
+                }
+
+                if (!data.businessHours) {
+                    addSystemMessage('🌙 Fora do horário comercial — bot adapta comportamento');
+                }
+            } catch (err) {
+                addSystemMessage('❌ Erro ao iniciar: ' + err.message);
+            }
+
+            document.getElementById('msg-input').focus();
+        }
+
+        function showTyping() {
+            const div = document.createElement('div');
+            div.className = 'msg bot typing-indicator';
+            div.id = 'typing-indicator';
+            div.innerHTML = `<div class="sender">🤖 Bot Branddi</div><span class="typing-dots"><span>.</span><span>.</span><span>.</span></span> digitando`;
+            chatEl.appendChild(div);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+        function hideTyping() {
+            const el = document.getElementById('typing-indicator');
+            if (el) el.remove();
+        }
+
+        async function sendMsg() {
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            if (!text || !sessionId) return;
+
+            input.value = '';
+            addMessage('lead', text);
+            showTyping();
+
+            try {
+                const res = await fetch('/api/simulate/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, text }),
+                });
+                const data = await res.json();
+                hideTyping();
+
+                // Debug badges
+                if (data.debug && showDebug) {
+                    addDebugInfo(data.debug);
+                }
+
+                for (const msg of data.botMessages) {
+                    showTyping();
+                    await sleep(500 + Math.random() * 800);
+                    hideTyping();
+                    addMessage('bot', msg);
+                }
+
+                if (data.debug?.handoff_summary) {
+                    addMessage('system', data.debug.handoff_summary);
+                }
+
+                updateStage(data.stage);
+
+                if (data.stage === 'human') {
+                    document.getElementById('ended-banner').style.display = 'block';
+                    document.getElementById('msg-input').disabled = true;
+                    document.getElementById('send-btn').disabled = true;
+                }
+            } catch (err) {
+                hideTyping();
+                addSystemMessage('❌ Erro: ' + err.message);
+            }
+        }
+
+        async function sendMedia(type) {
+            if (!sessionId) return;
+            addMessage('lead', `[${type === 'audio' ? '🎤 Áudio' : '📸 Imagem'}]`);
+
+            try {
+                const res = await fetch('/api/simulate/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, text: '', simulateMedia: type }),
+                });
+                const data = await res.json();
+                await sleep(600);
+                for (const msg of data.botMessages) {
+                    addMessage('bot', msg);
+                }
+            } catch (err) {
+                addSystemMessage('❌ Erro: ' + err.message);
+            }
+        }
+
+        function addMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = `msg ${role}`;
+            const senderName = role === 'bot' ? '🤖 Bot Branddi' : role === 'lead' ? '👤 Lead' : '📋 Sistema';
+            // Format WhatsApp markdown: *bold* → <b>bold</b>, _italic_ → <i>italic</i>
+            let html = text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/\*([^*]+)\*/g, '<b>$1</b>')
+                .replace(/_([^_]+)_/g, '<i>$1</i>')
+                .replace(/\n/g, '<br>');
+            div.innerHTML = `<div class="sender">${senderName}</div>${html}<div class="time">${new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</div>`;
+            chatEl.appendChild(div);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            addMessage('system', text);
+        }
+
+        function addDebugInfo(debug) {
+            const div = document.createElement('div');
+            div.className = 'debug-info';
+            div.style.display = showDebug ? 'block' : 'none';
+            div.style.padding = '4px 20px';
+
+            let badges = '';
+            if (debug.intent) {
+                const i = debug.intent;
+                badges += `<span class="debug-badge intent">Intent: ${i.intent || 'null'} (${(i.confidence*100).toFixed(0)}% ${i.method})</span>`;
+            }
+            if (debug.faq) {
+                badges += `<span class="debug-badge faq">FAQ: ${debug.faq.id} (${(debug.faq.score*100).toFixed(0)}%)</span>`;
+            }
+            if (debug.sentiment && debug.sentiment.sentiment !== 'neutral') {
+                const cls = debug.sentiment.sentiment;
+                badges += `<span class="debug-badge sentiment ${cls}">${cls}${debug.sentiment.urgency ? ' ⚠️' : ''}</span>`;
+            }
+            if (debug.entities && Object.keys(debug.entities).length > 0) {
+                badges += `<span class="debug-badge entity">Entities: ${Object.keys(debug.entities).join(', ')}</span>`;
+            }
+            if (debug.action) {
+                badges += `<span class="debug-badge action">${debug.action}</span>`;
+            }
+            if (debug.priority) {
+                badges += `<span class="debug-badge priority">Prioridade: ${debug.priority}</span>`;
+            }
+            if (debug.retry) {
+                badges += `<span class="debug-badge action">Retry #${debug.retry}</span>`;
+            }
+
+            div.innerHTML = badges;
+            chatEl.appendChild(div);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        function updateStage(current) {
+            const steps = document.querySelectorAll('.stage-step');
+            const currentIdx = stages.indexOf(current);
+            steps.forEach((step, i) => {
+                step.classList.remove('active', 'done');
+                if (i < currentIdx) step.classList.add('done');
+                else if (i === currentIdx) step.classList.add('active');
+            });
+        }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        // ─── Phrases Editor ──────────────────────────────────────
+        const PHRASE_META = {
+            // Fluxo
+            welcome:               { label: 'Boas-vindas',            cat: 'flow', vars: '{{nome}}' },
+            outside_hours:         { label: 'Fora do horário',        cat: 'flow' },
+            greeting_menu:         { label: 'Saudação + Menu',        cat: 'flow' },
+            ask_company_comercial: { label: 'Pedir empresa (comercial)', cat: 'flow' },
+            ask_company_opec:      { label: 'Pedir empresa (OPEC)',   cat: 'flow' },
+            ask_domain:            { label: 'Pedir domínio',          cat: 'flow' },
+            ask_context:           { label: 'Pedir contexto',         cat: 'flow' },
+            classified_comercial:  { label: 'Handoff comercial',      cat: 'flow' },
+            classified_opec:       { label: 'Handoff OPEC',           cat: 'flow' },
+            // Retries
+            retry_qualifying:      { label: 'Retry qualificação',     cat: 'retry' },
+            domain_invalid:        { label: 'Domínio inválido',       cat: 'retry' },
+            domain_skipped:        { label: 'Domínio pulado',         cat: 'retry' },
+            domain_forced:         { label: 'Domínio forçado',        cat: 'retry' },
+            escalate_max_retries:  { label: 'Escalar p/ humano',      cat: 'retry' },
+            smart_skip_company_domain: { label: 'Skip empresa+domínio', cat: 'retry', vars: '{{empresa}} {{dominio}}' },
+            smart_skip_company:    { label: 'Skip só empresa',        cat: 'retry', vars: '{{empresa}}' },
+            // Mídia
+            media_audio:           { label: 'Resposta a áudio',       cat: 'media' },
+            media_image:           { label: 'Resposta a imagem',      cat: 'media' },
+            // FAQs
+            faq_what_is_branddi:   { label: 'FAQ: O que é a Branddi', cat: 'faq' },
+            faq_brand_bidding:     { label: 'FAQ: Brand Bidding',     cat: 'faq' },
+            faq_pricing:           { label: 'FAQ: Preços',            cat: 'faq' },
+            faq_demo:              { label: 'FAQ: Demo/Apresentação', cat: 'faq' },
+            faq_notification:      { label: 'FAQ: Notificação',       cat: 'faq' },
+            faq_support:           { label: 'FAQ: Suporte',           cat: 'faq' },
+            faq_business_hours:    { label: 'FAQ: Horário',           cat: 'faq' },
+            faq_location:          { label: 'FAQ: Localização',       cat: 'faq' },
+        };
+
+        let phrasesData = {};
+        let phrasesLoaded = false;
+        let currentPhraseCat = 'flow';
+
+        function togglePhrases() {
+            const panel = document.getElementById('phrases-panel');
+            panel.classList.toggle('collapsed');
+            if (!panel.classList.contains('collapsed') && !phrasesLoaded) {
+                loadPhrases();
+            }
+        }
+
+        async function loadPhrases() {
+            try {
+                const res = await fetch('/api/simulate/phrases');
+                const data = await res.json();
+                phrasesData = data.phrases;
+                phrasesLoaded = true;
+                renderPhrases();
+            } catch (err) {
+                console.error('Erro ao carregar frases:', err);
+            }
+        }
+
+        function renderPhrases() {
+            const list = document.getElementById('phrases-list');
+            list.innerHTML = '';
+
+            for (const [key, meta] of Object.entries(PHRASE_META)) {
+                const p = phrasesData[key];
+                if (!p) continue;
+
+                const item = document.createElement('div');
+                item.className = `phrase-item${p.edited ? ' edited' : ''}`;
+                item.dataset.cat = meta.cat;
+                item.dataset.key = key;
+                if (meta.cat !== currentPhraseCat && currentPhraseCat !== 'all') {
+                    item.classList.add('hidden');
+                }
+
+                const varsHint = meta.vars ? `<span class="phrase-vars">Variáveis: ${meta.vars}</span>` : '';
+
+                item.innerHTML = `
+                    <label class="phrase-label">
+                        ${meta.label}
+                        <span class="phrase-edited-dot"></span>
+                        ${varsHint}
+                    </label>
+                    <textarea class="phrase-textarea${p.edited ? ' edited' : ''}"
+                        data-key="${key}"
+                        data-default="${encodeURIComponent(p.default)}"
+                        oninput="onPhraseEdit(this)"
+                        rows="3">${escForTextarea(p.current)}</textarea>
+                    <button class="phrase-reset-btn" onclick="resetPhrase('${key}')">↩ restaurar original</button>
+                `;
+                list.appendChild(item);
+            }
+        }
+
+        function escForTextarea(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function onPhraseEdit(el) {
+            const key = el.dataset.key;
+            const defaultVal = decodeURIComponent(el.dataset.default);
+            const current = el.value;
+            const isEdited = current !== defaultVal;
+            el.classList.toggle('edited', isEdited);
+            el.closest('.phrase-item').classList.toggle('edited', isEdited);
+        }
+
+        function filterPhrases(cat) {
+            currentPhraseCat = cat;
+            document.querySelectorAll('.phrases-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.phrases-tab[data-cat="${cat}"]`)?.classList.add('active');
+
+            document.querySelectorAll('.phrase-item').forEach(item => {
+                if (cat === 'all' || item.dataset.cat === cat) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+        }
+
+        async function savePhrases() {
+            const phrases = {};
+            document.querySelectorAll('.phrase-textarea').forEach(el => {
+                const key = el.dataset.key;
+                const defaultVal = decodeURIComponent(el.dataset.default);
+                const current = el.value;
+                if (current !== defaultVal) {
+                    phrases[key] = current;
+                } else {
+                    phrases[key] = null; // reset to default
+                }
+            });
+
+            try {
+                const res = await fetch('/api/simulate/phrases', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phrases }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    // Reload to reflect saved state
+                    await loadPhrases();
+                    alert(`✅ ${data.updated} frases atualizadas! Inicie uma nova conversa para testar.`);
+                }
+            } catch (err) {
+                alert('❌ Erro ao salvar: ' + err.message);
+            }
+        }
+
+        function resetPhrase(key) {
+            const el = document.querySelector(`.phrase-textarea[data-key="${key}"]`);
+            if (!el) return;
+            el.value = decodeURIComponent(el.dataset.default);
+            el.classList.remove('edited');
+            el.closest('.phrase-item').classList.remove('edited');
+        }
+
+        async function resetAllPhrases() {
+            if (!confirm('Restaurar TODAS as frases para o original?')) return;
+            try {
+                await fetch('/api/simulate/phrases/reset', { method: 'POST' });
+                await loadPhrases();
+                alert('✅ Todas as frases foram restauradas.');
+            } catch (err) {
+                alert('❌ Erro: ' + err.message);
+            }
+        }
+
+        // Auto-start
+        newConversation();
+    </script>
+</body>
+</html>

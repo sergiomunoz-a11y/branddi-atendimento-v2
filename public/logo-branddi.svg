@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <rect width="40" height="40" rx="10" fill="url(#branddi-grad)"/>
+  <defs>
+    <linearGradient id="branddi-grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00E5FF"/>
+      <stop offset="100%" stop-color="#00B8D4"/>
+    </linearGradient>
+  </defs>
+  <!-- Stylized "B" mark -->
+  <path d="M12 10h6c2.8 0 5 1.6 5 4.2 0 1.8-1.2 3.1-2.8 3.6v.1c2 .4 3.4 2 3.4 4 0 3-2.4 4.9-5.8 4.9H12V10z" fill="#001F2B"/>
+  <path d="M15.6 13v4.2h2.2c1.6 0 2.6-.8 2.6-2.1s-1-2.1-2.6-2.1h-2.2zM15.6 20v4.6h2.6c1.8 0 2.8-.9 2.8-2.3s-1-2.3-2.8-2.3h-2.6z" fill="url(#branddi-grad)"/>
+</svg>

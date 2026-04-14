@@ -1,0 +1,217 @@
+/**
+ * Unipile Service — WhatsApp via Unipile API
+ * v2: Deduplicação de mensagens, reset bot_away_sent, structured logging
+ */
+import 'dotenv/config';
+import {
+    findConversationByChat, createConversation, updateConversation,
+    findLeadByPhone, createLead, saveMessage, normalizePhone
+} from './supabase.js';
+import { processChatbotMessage } from './chatbot-engine.js';
+import logger from './logger.js';
+
+// ─── Config ───────────────────────────────────────────────────────────
+const API_KEY = process.env.UNIPILE_API_KEY;
+const DSN     = process.env.UNIPILE_DSN;
+const ACCT_ID = process.env.UNIPILE_ACCOUNT_ID;
+const BASE    = DSN ? `https://${DSN}/api/v1` : null;
+
+let _pollingInterval = null;
+let _lastPollTime    = Date.now() - 60_000;
+
+export function isAvailable() {
+    return !!(API_KEY && DSN && ACCT_ID);
+}
+
+// ─── API Request ──────────────────────────────────────────────────────
+
+async function req(endpoint, options = {}) {
+    if (!isAvailable()) throw new Error('Unipile não configurado');
+    const url  = `${BASE}${endpoint}`;
+    const res  = await fetch(url, {
+        ...options,
+        headers: { 'X-API-KEY': API_KEY, 'Accept': 'application/json', ...(options.headers || {}) },
+    });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Unipile (${res.status}): ${err}`);
+    }
+    return res.json();
+}
+
+// ─── Accounts ─────────────────────────────────────────────────────────
+
+export async function listAccounts() {
+    return req('/accounts');
+}
+
+export async function getWhatsAppAccountId() {
+    if (ACCT_ID) return ACCT_ID;
+    const result = await listAccounts();
+    const wa = (result.items || result || []).find(a =>
+        (a.type || a.provider || '').toUpperCase() === 'WHATSAPP'
+    );
+    return wa?.id || null;
+}
+
+// ─── Chats ────────────────────────────────────────────────────────────
+
+export async function listChats({ limit = 30, cursor, unread } = {}) {
+    let qs = `?account_type=WHATSAPP&limit=${limit}`;
+    if (cursor) qs += `&cursor=${encodeURIComponent(cursor)}`;
+    if (unread != null) qs += `&unread=${unread}`;
+    return req(`/chats${qs}`);
+}
+
+export async function getChat(chatId) {
+    return req(`/chats/${chatId}`);
+}
+
+export async function getChatAttendees(chatId) {
+    return req(`/chats/${chatId}/attendees`);
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────
+
+export async function getMessages(chatId, { limit = 50, cursor } = {}) {
+    let qs = `?limit=${limit}`;
+    if (cursor) qs += `&cursor=${encodeURIComponent(cursor)}`;
+    return req(`/chats/${chatId}/messages${qs}`);
+}
+
+export async function sendMessage(chatId, text) {
+    const fd = new FormData();
+    fd.append('text', text);
+    return req(`/chats/${chatId}/messages`, { method: 'POST', body: fd });
+}
+
+export async function startNewChat(phoneNumber, text) {
+    const accountId = await getWhatsAppAccountId();
+    if (!accountId) throw new Error('Nenhuma conta WhatsApp conectada no Unipile');
+    const fd = new FormData();
+    fd.append('account_id', accountId);
+    fd.append('text',       text);
+    fd.append('attendees_ids', phoneNumber);
+    return req('/chats', { method: 'POST', body: fd });
+}
+
+export function getAttachmentUrl(uri) {
+    if (!uri || !isAvailable()) return null;
+    const parts = uri.replace('att://', '').split('/');
+    return `${BASE}/attachments/${parts.slice(1).join('/')}?X-API-KEY=${API_KEY}`;
+}
+
+// ─── Polling ──────────────────────────────────────────────────────────
+
+export async function startPolling(intervalMs = 10_000) {
+    if (!isAvailable()) {
+        logger.warn('Unipile não configurado — polling desativado');
+        return;
+    }
+    logger.info('WhatsApp polling iniciado', { interval_ms: intervalMs });
+
+    async function poll() {
+        try {
+            const result = await listChats({ limit: 20 });
+            const chats  = result.items || [];
+
+            for (const chat of chats) {
+                await processChat(chat);
+            }
+            _lastPollTime = Date.now();
+        } catch (err) {
+            logger.warn('Polling error', { error: err.message });
+        }
+    }
+
+    await poll();
+    _pollingInterval = setInterval(poll, intervalMs);
+}
+
+export function stopPolling() {
+    if (_pollingInterval) clearInterval(_pollingInterval);
+}
+
+async function processChat(chat) {
+    try {
+        let conversation = await findConversationByChat(chat.id);
+
+        if (!conversation) {
+            const attendees = (await getChatAttendees(chat.id)).items || [];
+            const contact   = attendees.find(a => !a.is_self);
+            if (!contact) return;
+            logger.debug('Contact fields', {
+                keys: Object.keys(contact),
+                provider_id: contact.provider_id,
+                phone_number: contact.phone_number,
+                name: contact.name,
+            });
+
+            const rawPhone = contact.phone_number
+                          || contact.phone
+                          || (!String(contact.provider_id || '').includes('@lid') && contact.provider_id)
+                          || contact.id
+                          || '';
+            const phone = normalizePhone(rawPhone);
+            let lead = phone ? await findLeadByPhone(phone) : null;
+
+            if (!lead) {
+                lead = await createLead({
+                    name:   contact.name || phone || 'Desconhecido',
+                    phone,
+                    origin: 'whatsapp_direct',
+                    origin_metadata: { attendee_id: contact.provider_id },
+                });
+            }
+
+            conversation = await createConversation({
+                lead_id:          lead.id,
+                whatsapp_chat_id: chat.id,
+                channel:          'whatsapp_direct',
+                status:           'waiting',
+                chatbot_stage:    'welcome',
+                last_message_at:  new Date().toISOString(),
+            });
+        }
+
+        // Busca mensagens novas (desde último poll)
+        const msgs  = await getMessages(chat.id, { limit: 10 });
+        const newMsgs = (msgs.items || []).filter(m =>
+            new Date(m.timestamp) > new Date(_lastPollTime - 5_000)
+        );
+
+        for (const msg of newMsgs) {
+            const saved = await saveMessage({
+                conversation_id:   conversation.id,
+                direction:         msg.is_sender ? 'outbound' : 'inbound',
+                sender_type:       msg.is_sender ? 'human' : 'lead',
+                sender_name:       msg.is_sender ? 'Atendente' : conversation.leads?.name || 'Lead',
+                content:           msg.text || '',
+                attachments:       msg.attachments || [],
+                unipile_message_id: msg.id,
+                created_at:        msg.timestamp,
+            });
+
+            // v2: Se saveMessage retorna null, mensagem é duplicata — pula processamento
+            if (!saved) continue;
+
+            // v2: Reset bot_away_sent quando nova msg inbound chega em conversa humana
+            if (!msg.is_sender && conversation.chatbot_stage === 'human') {
+                await updateConversation(conversation.id, { bot_away_sent: false });
+            }
+
+            // Processa chatbot apenas para mensagens inbound
+            if (!msg.is_sender && conversation.chatbot_stage !== 'human') {
+                await processChatbotMessage(conversation, msg.text || '', chat.id, msg.attachments || []);
+            }
+        }
+
+        if (newMsgs.length > 0) {
+            await updateConversation(conversation.id, {
+                last_message_at: new Date().toISOString(),
+            });
+        }
+    } catch (err) {
+        logger.warn('Erro ao processar chat', { chat_id: chat.id, error: err.message });
+    }
+}

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Branddi Atendimento — WhatsApp Inbox</title>
+    <meta name="description" content="Plataforma central de atendimento WhatsApp da Branddi — inbox inteligente, chatbot de triagem e sincronizacao com CRM." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<!-- ─── Side Nav ─────────────────────────────────────────────── -->
+<nav class="side-nav">
+    <div class="side-nav-brand" title="Branddi Atendimento v2">
+        <img src="/logo-branddi.svg" alt="Branddi" width="32" height="32" />
+    </div>
+    <div class="side-nav-links">
+        <button class="nav-btn active" data-tab="inbox" id="tab-inbox" title="Inbox">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-inbox"></use></svg></span>
+            <span class="nav-label">Inbox</span>
+            <span class="nav-badge" id="badge-inbox">0</span>
+        </button>
+        <button class="nav-btn" data-tab="leads" id="tab-leads" title="Leads">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-users"></use></svg></span>
+            <span class="nav-label">Leads</span>
+        </button>
+        <button class="nav-btn" data-tab="dashboard" id="tab-dashboard" title="Dashboard">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-chart"></use></svg></span>
+            <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-btn" data-tab="scripts" id="tab-scripts" title="Scripts">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-clipboard"></use></svg></span>
+            <span class="nav-label">Scripts</span>
+        </button>
+        <button class="nav-btn" data-tab="history" id="tab-history" title="Histórico">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-clock"></use></svg></span>
+            <span class="nav-label">Histórico</span>
+        </button>
+    </div>
+    <div class="side-nav-bottom">
+        <!-- Usuário logado (injetado via JS) -->
+        <div id="side-nav-user"></div>
+        <a href="/simulate.html" class="nav-btn" title="Simulador do Bot" id="btn-simulator" target="_blank">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-bot"></use></svg></span>
+            <span class="nav-label">Simulador</span>
+        </a>
+        <button class="nav-btn" onclick="openSettingsModal()" title="Configurações" id="btn-settings">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-settings"></use></svg></span>
+            <span class="nav-label">Config</span>
+        </button>
+        <div class="side-status" onclick="openWaConnect()" title="Clique para configurar conexão WhatsApp" style="cursor:pointer">
+            <div class="status-dot" id="status-dot"></div>
+        </div>
+    </div>
+</nav>
+
+<!-- ─── Main Layout ────────────────────────────────────────── -->
+<main class="app-layout">
+
+<!-- ════════════ INBOX TAB ════════════ -->
+<section class="tab-panel active" id="panel-inbox">
+    <div class="mobile-header" id="mobile-header">
+        <button class="mobile-toggle" id="mobile-sidebar-toggle">☰</button>
+        <span class="mobile-title">Conversas</span>
+        <span class="nav-badge mobile-badge" id="badge-inbox-mobile">0</span>
+    </div>
+    <div class="inbox-layout">
+
+        <!-- Sidebar: Lista de conversas -->
+        <aside class="inbox-sidebar">
+            <div class="sidebar-header">
+                <h2 class="sidebar-title">Conversas</h2>
+
+                <!-- Abas por tipo (visibilidade controlada por JS via role) -->
+                <div class="inbox-type-tabs" id="inbox-type-tabs">
+                    <button class="type-tab active" data-type="all" id="type-tab-all">Todos</button>
+                    <button class="type-tab" data-type="inbound" id="type-tab-inbound">
+                        🌐 Site
+                    </button>
+                    <button class="type-tab" data-type="prospecting" id="type-tab-prospecting">
+                        🚀 Prospecção
+                    </button>
+                </div>
+
+                <!-- Filtros de status -->
+                <div class="sidebar-filters">
+                    <button class="filter-chip active" data-filter="all">Todos</button>
+                    <button class="filter-chip" data-filter="waiting">Aguardando</button>
+                    <button class="filter-chip" data-filter="in_progress">Em andamento</button>
+                </div>
+
+                <!-- Busca de conversas -->
+                <input type="text" class="sidebar-search" id="inbox-search" placeholder="Buscar conversa..." autocomplete="off" />
+            </div>
+            <div class="conversation-list" id="conversation-list">
+                <div class="skeleton-conv-item"><div class="skeleton-conv-row"><div class="skeleton skeleton-circle"></div><div style="flex:1"><div class="skeleton skeleton-line" style="width:60%"></div><div class="skeleton skeleton-line-sm" style="width:40%"></div></div></div></div>
+                <div class="skeleton-conv-item"><div class="skeleton-conv-row"><div class="skeleton skeleton-circle"></div><div style="flex:1"><div class="skeleton skeleton-line" style="width:75%"></div><div class="skeleton skeleton-line-sm" style="width:50%"></div></div></div></div>
+                <div class="skeleton-conv-item"><div class="skeleton-conv-row"><div class="skeleton skeleton-circle"></div><div style="flex:1"><div class="skeleton skeleton-line" style="width:55%"></div><div class="skeleton skeleton-line-sm" style="width:35%"></div></div></div></div>
+                <div class="skeleton-conv-item"><div class="skeleton-conv-row"><div class="skeleton skeleton-circle"></div><div style="flex:1"><div class="skeleton skeleton-line" style="width:65%"></div><div class="skeleton skeleton-line-sm" style="width:45%"></div></div></div></div>
+            </div>
+        </aside>
+
+        <!-- Chat Area -->
+        <div class="chat-area" id="chat-area">
+            <div class="empty-state-pro">
+                <div class="empty-illustration"><svg class="icon"><use href="/icons.svg#icon-inbox"></use></svg></div>
+                <h4 class="empty-title">Selecione uma conversa</h4>
+                <p class="empty-desc">Escolha uma conversa na lista ao lado para iniciar o atendimento</p>
+            </div>
+        </div>
+
+        <!-- Lead Panel -->
+        <aside class="lead-panel" id="lead-panel">
+            <div class="lead-panel-empty" id="lead-panel-empty">
+                <div class="empty-state-pro" style="padding:24px 16px">
+                    <div class="empty-illustration" style="width:60px;height:60px"><svg class="icon"><use href="/icons.svg#icon-user"></use></svg></div>
+                    <p class="empty-desc">Selecione uma conversa para ver detalhes do lead</p>
+                </div>
+            </div>
+
+            <!-- Conteudo do painel — aparece quando conversa selecionada -->
+            <div class="lead-panel-content" id="lead-panel-content" style="display:none">
+
+                <!-- Info do lead (avatar + nome + contato) -->
+                <div class="lp-section lp-contact-header">
+                    <div class="lp-avatar" id="lp-avatar">?</div>
+                    <div class="lp-name" id="lp-name">—</div>
+                    <div class="lp-phone" id="lp-phone">—</div>
+                    <div class="lp-company" id="lp-company"></div>
+                </div>
+
+                <!-- Sobre a conversa -->
+                <div class="lp-section">
+                    <div class="lp-section-title">Sobre a conversa</div>
+                    <div class="lp-info-grid">
+                        <div class="lp-info-item">
+                            <span class="lp-info-label">ID</span>
+                            <span class="lp-info-value" id="lp-conv-id">—</span>
+                        </div>
+                        <div class="lp-info-item">
+                            <span class="lp-info-label">Status</span>
+                            <span class="lp-info-value" id="lp-conv-status">—</span>
+                        </div>
+                        <div class="lp-info-item">
+                            <span class="lp-info-label">Tipo</span>
+                            <span class="lp-info-value">
+                                <span class="conv-type-badge" id="lp-type-badge">—</span>
+                                <select class="lp-type-select admin-only" id="lp-type-select" style="display:none">
+                                    <option value="inbound">📥 Inbound</option>
+                                    <option value="prospecting">🚀 Prospeccao</option>
+                                </select>
+                            </span>
+                        </div>
+                        <div class="lp-info-item">
+                            <span class="lp-info-label">Origem</span>
+                            <span class="lp-info-value" id="lp-conv-origin">—</span>
+                        </div>
+                        <div class="lp-info-item">
+                            <span class="lp-info-label">Atribuido a</span>
+                            <span class="lp-info-value" id="lp-conv-assigned">—</span>
+                        </div>
+                        <div class="lp-info-item">
+                            <span class="lp-info-label">Criado em</span>
+                            <span class="lp-info-value" id="lp-conv-created">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tags -->
+                <div class="lp-section">
+                    <div class="lp-section-title">Tags</div>
+                    <div class="lp-tags" id="lp-tags">—</div>
+                </div>
+
+                <!-- Deal vinculado no Pipedrive -->
+                <div class="lp-section lp-deal-section" id="lp-deal-section">
+                    <div class="lp-section-title">Deal no Pipedrive</div>
+                    <div id="lp-deal-content">
+                        <div class="lp-deal-loading" id="lp-deal-loading" style="display:none">
+                            <span class="lp-muted">Buscando deal...</span>
+                        </div>
+                        <div id="lp-deal-found" style="display:none">
+                            <div class="lp-deal-card" id="lp-deal-card">
+                                <div class="lp-deal-title" id="lp-deal-title">—</div>
+                                <div class="lp-deal-meta">
+                                    <span class="lp-deal-stage" id="lp-deal-stage">—</span>
+                                </div>
+                                <a class="lp-deal-link" id="lp-deal-link" href="#" target="_blank">
+                                    🔗 Ver no Pipedrive
+                                </a>
+                            </div>
+                        </div>
+                        <div id="lp-deal-notfound" style="display:none">
+                            <p class="lp-muted">Nenhum deal vinculado.</p>
+                            <button class="btn-sm btn-primary" id="btn-create-deal-lp">
+                                + Criar deal
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historico de conversas do lead -->
+                <div class="lp-section">
+                    <div class="lp-section-title">Historico de conversas</div>
+                    <div class="lp-history-list" id="lp-history-list">
+                        <span class="lp-muted">Nenhuma conversa anterior</span>
+                    </div>
+                </div>
+
+                <!-- Eventos da conversa -->
+                <div class="lp-section">
+                    <div class="lp-section-title">Eventos da conversa</div>
+                    <div class="lp-events-list" id="lp-events-list">
+                        <span class="lp-muted">Nenhum evento registrado</span>
+                    </div>
+                </div>
+
+                <!-- Atividades Pipedrive -->
+                <div class="lp-section" id="lp-activities-section" style="display:none">
+                    <div class="lp-section-title">Registrar atividade</div>
+                    <button class="btn-sm btn-outline lp-act-btn" id="btn-act-whatsapp">
+                        📱 Transcricao WhatsApp
+                    </button>
+                    <button class="btn-sm btn-outline lp-act-btn" id="btn-act-reply">
+                        💬 Registrar Resposta do Lead
+                    </button>
+                </div>
+
+                <!-- Botao sincronizar Pipedrive -->
+                <div class="lp-section">
+                    <button class="btn-sm btn-outline" id="btn-sync-pipedrive-lp" style="width:100%">
+                        🔄 Sincronizar com Pipedrive
+                    </button>
+                </div>
+
+            </div>
+        </aside>
+
+    </div>
+</section>
+
+<!-- ════════════ LEADS TAB ════════════ -->
+<section class="tab-panel" id="panel-leads">
+    <div class="panel-header">
+        <h2 class="panel-title">Leads</h2>
+        <div class="panel-actions">
+            <input type="text" class="search-input" id="leads-search" placeholder="🔍 Buscar por nome, empresa ou telefone..." />
+            <select class="filter-select" id="leads-filter-origin">
+                <option value="">Todas as origens</option>
+                <option value="form">Formulario</option>
+                <option value="whatsapp_direct">WhatsApp Direto</option>
+                <option value="prospecting">Prospeccao</option>
+            </select>
+            <select class="filter-select" id="leads-filter-class">
+                <option value="">Todas as classificacoes</option>
+                <option value="comercial">Comercial</option>
+                <option value="opec">OPEC</option>
+                <option value="unclassified">Nao classificado</option>
+            </select>
+        </div>
+    </div>
+    <div class="leads-table-wrap">
+        <table class="leads-table">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Empresa</th>
+                    <th>Telefone</th>
+                    <th>Origem</th>
+                    <th>Classificacao</th>
+                    <th>CRM</th>
+                    <th>Criado em</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody id="leads-tbody">
+                <tr class="skeleton-table-row"><td><div class="skeleton skeleton-table-cell" style="width:80%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:70%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:60%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:50%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:50%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:40%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:55%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:30%"></div></td></tr>
+                <tr class="skeleton-table-row"><td><div class="skeleton skeleton-table-cell" style="width:70%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:60%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:55%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:45%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:55%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:35%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:50%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:25%"></div></td></tr>
+                <tr class="skeleton-table-row"><td><div class="skeleton skeleton-table-cell" style="width:75%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:65%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:50%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:40%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:45%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:30%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:45%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:30%"></div></td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ════════════ DASHBOARD TAB ════════════ -->
+<section class="tab-panel" id="panel-dashboard">
+    <div class="panel-header">
+        <h2 class="panel-title">Dashboard Comercial</h2>
+        <div class="panel-actions">
+            <select class="filter-select" id="dash-period">
+                <option value="7">Ultimos 7 dias</option>
+                <option value="30" selected>Ultimos 30 dias</option>
+                <option value="90">Ultimos 90 dias</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">Total Leads</div>
+            <div class="kpi-value" id="kpi-total">—</div>
+            <div class="kpi-sub">no periodo</div>
+        </div>
+        <div class="kpi-card kpi-green">
+            <div class="kpi-label">🟢 Comercial</div>
+            <div class="kpi-value" id="kpi-comercial">—</div>
+            <div class="kpi-sub" id="kpi-comercial-pct">—%</div>
+        </div>
+        <div class="kpi-card kpi-amber">
+            <div class="kpi-label">🟡 OPEC</div>
+            <div class="kpi-value" id="kpi-opec">—</div>
+            <div class="kpi-sub" id="kpi-opec-pct">—%</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">📋 Formulario</div>
+            <div class="kpi-value" id="kpi-form">—</div>
+            <div class="kpi-sub">via site</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">📱 WhatsApp Direto</div>
+            <div class="kpi-value" id="kpi-wa">—</div>
+            <div class="kpi-sub">organico</div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3 class="chart-title">Leads por Dia</h3>
+            <canvas id="chart-leads-day" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3 class="chart-title">Distribuicao por Origem</h3>
+            <canvas id="chart-origin" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3 class="chart-title">Classificacao</h3>
+            <canvas id="chart-classification" height="200"></canvas>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════ SCRIPTS TAB ════════════ -->
+<section class="tab-panel" id="panel-scripts">
+    <div class="panel-header">
+        <h2 class="panel-title">Scripts de Atendimento</h2>
+        <button class="btn-primary" id="btn-new-script">+ Novo Script</button>
+    </div>
+    <div class="scripts-categories" id="scripts-categories">
+        <button class="script-cat-btn active" data-cat="">Todos</button>
+        <button class="script-cat-btn" data-cat="welcome">👋 Boas-vindas</button>
+        <button class="script-cat-btn" data-cat="comercial">🟢 Comercial</button>
+        <button class="script-cat-btn" data-cat="opec">🟡 OPEC</button>
+        <button class="script-cat-btn" data-cat="closing">🤝 Encerramento</button>
+    </div>
+    <div class="scripts-grid" id="scripts-grid">
+        <div class="skeleton skeleton-kpi" style="min-height:120px"></div>
+        <div class="skeleton skeleton-kpi" style="min-height:120px"></div>
+        <div class="skeleton skeleton-kpi" style="min-height:120px"></div>
+    </div>
+</section>
+
+<!-- ════════════ HISTORICO TAB ════════════ -->
+<section class="tab-panel" id="panel-history">
+    <div class="panel-header">
+        <h2 class="panel-title">🕓 Historico de Conversas</h2>
+        <div class="panel-actions">
+            <input type="text" class="search-input" id="history-search" placeholder="🔍 Buscar nome ou empresa..." />
+            <select class="filter-select" id="history-filter-status">
+                <option value="">Todos os status</option>
+                <option value="closed">Encerradas</option>
+                <option value="in_progress">Em andamento</option>
+                <option value="waiting">Aguardando</option>
+            </select>
+            <select class="filter-select" id="history-filter-days">
+                <option value="7">Ultimos 7 dias</option>
+                <option value="30" selected>Ultimos 30 dias</option>
+                <option value="90">Ultimos 90 dias</option>
+                <option value="">Todo o periodo</option>
+            </select>
+        </div>
+    </div>
+    <div class="leads-table-wrap">
+        <table class="leads-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Lead</th>
+                    <th>Empresa</th>
+                    <th>Canal</th>
+                    <th>Classificacao</th>
+                    <th>Status</th>
+                    <th>CRM</th>
+                    <th>Mensagens</th>
+                </tr>
+            </thead>
+            <tbody id="history-tbody">
+                <tr class="skeleton-table-row"><td><div class="skeleton skeleton-table-cell" style="width:70%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:60%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:55%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:40%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:50%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:45%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:35%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:30%"></div></td></tr>
+                <tr class="skeleton-table-row"><td><div class="skeleton skeleton-table-cell" style="width:65%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:55%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:50%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:35%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:45%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:40%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:30%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:25%"></div></td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+</main>
+
+<!-- ─── Modals ─────────────────────────────────────────────── -->
+
+<!-- Modal: Novo Script -->
+<div class="modal-overlay" id="modal-script" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modal-script-title">Novo Script</h3>
+            <button class="modal-close" onclick="closeModal('modal-script')">✕</button>
+        </div>
+        <form id="form-script" class="modal-body">
+            <input type="hidden" id="script-id" />
+            <div class="form-group">
+                <label>Categoria</label>
+                <select id="script-category" required>
+                    <option value="welcome">👋 Boas-vindas</option>
+                    <option value="comercial">🟢 Comercial</option>
+                    <option value="opec">🟡 OPEC</option>
+                    <option value="qualification">❓ Qualificacao</option>
+                    <option value="closing">🤝 Encerramento</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Titulo</label>
+                <input type="text" id="script-title" placeholder="Ex: Apresentacao Brand Bidding" required />
+            </div>
+            <div class="form-group">
+                <label>Mensagem <span class="label-hint">Use {{nome}}, {{empresa}}, {{data}}</span></label>
+                <textarea id="script-content" rows="6" placeholder="Digite a mensagem..." required></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeModal('modal-script')">Cancelar</button>
+                <button type="submit" class="btn-primary">Salvar Script</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ─── Modal: Conectar WhatsApp via QR Code ──────────── -->
+<div class="modal-overlay" id="modal-wa-connect" style="display:none" onclick="if(event.target===this)closeWaConnect()">
+    <div class="modal" style="max-width:420px;text-align:center">
+        <div class="modal-header">
+            <h3 style="display:flex;align-items:center;gap:8px">📱 Conectar WhatsApp</h3>
+            <button class="modal-close" onclick="closeWaConnect()">✕</button>
+        </div>
+        <div class="modal-body" style="padding:24px">
+            <!-- Status atual -->
+            <div id="wa-current-status" style="margin-bottom:20px;padding:12px 16px;border-radius:10px;background:var(--bg-tertiary);text-align:left">
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Status da conta WhatsApp</div>
+                <div id="wa-status-detail" style="font-size:14px;font-weight:500">⏳ Verificando...</div>
+            </div>
+
+            <!-- Area do QR Code -->
+            <div id="wa-qr-area" style="display:none">
+                <p style="color:var(--text-secondary);font-size:13px;margin-bottom:20px;line-height:1.5">
+                    Abra o WhatsApp no celular → <strong>Aparelhos conectados</strong> → <strong>Conectar um aparelho</strong> → escaneie o QR abaixo:
+                </p>
+                <div id="wa-qr-container" style="min-height:200px;display:flex;align-items:center;justify-content:center;background:white;border-radius:12px;padding:16px;margin:0 auto;max-width:260px">
+                    <span style="color:#666">⏳ Gerando QR code...</span>
+                </div>
+                <p style="font-size:11px;color:var(--text-muted);margin-top:12px">O QR code expira em poucos minutos. Escaneie rapidamente.</p>
+            </div>
+
+            <!-- Acoes -->
+            <div id="wa-connect-actions" style="display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+                <button class="btn-primary" id="btn-wa-generate-qr" onclick="generateWaQR()">
+                    📱 Gerar QR Code
+                </button>
+                <button class="btn-secondary" id="btn-wa-disconnect" onclick="disconnectWa()" style="display:none">
+                    🔌 Desconectar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Modal: Configuracoes da Plataforma ──────────── -->
+<div class="modal-overlay" id="modal-settings" style="display:none" onclick="if(event.target===this)closeSettingsModal()">
+    <div class="modal" style="max-width:700px">
+        <div class="modal-header">
+            <h3>⚙️ Configuracoes</h3>
+            <button class="modal-close" onclick="closeSettingsModal()">✕</button>
+        </div>
+
+        <!-- Abas do modal -->
+        <div class="settings-tabs">
+            <button class="settings-tab active" data-stab="general" onclick="switchSettingsTab('general')">
+                ⚙️ Geral
+            </button>
+            <button class="settings-tab admin-only" data-stab="users" onclick="switchSettingsTab('users')" style="display:none">
+                👥 Usuarios
+            </button>
+        </div>
+
+        <!-- ABA GERAL -->
+        <div class="settings-tab-panel active" id="stab-general">
+            <div class="modal-body" style="padding:24px;max-height:70vh;overflow-y:auto">
+
+                <!-- Perfil -->
+                <div class="settings-section">
+                    <h4 class="settings-section-title">👤 Perfil do Atendente</h4>
+                    <div class="settings-row">
+                        <div class="settings-photo-upload" id="settings-photo-preview" onclick="document.getElementById('settings-photo-input').click()" title="Clique para alterar">
+                            <span id="settings-photo-icon">👤</span>
+                        </div>
+                        <input type="file" id="settings-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)" />
+                        <div class="settings-field-group">
+                            <label>Nome do atendente</label>
+                            <input type="text" id="settings-agent-name" class="settings-input" placeholder="Ex: Time Branddi" />
+                            <span style="font-size:11px;color:var(--text-muted)">Aparece como remetente nas mensagens</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bot 24h -->
+                <div class="settings-section">
+                    <h4 class="settings-section-title">🤖 Bot 24h — Resposta de Ausencia</h4>
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:10px">
+                            <input type="checkbox" id="settings-away-enabled" style="width:18px;height:18px;accent-color:#00E5FF" />
+                            Ativar resposta automatica de ausencia
+                        </label>
+                    </div>
+                    <div class="settings-row" style="align-items:flex-start;gap:16px">
+                        <div class="form-group" style="flex:0 0 160px">
+                            <label>Minutos sem resposta</label>
+                            <input type="number" id="settings-away-minutes" class="settings-input" min="1" max="120" value="10" />
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>Mensagem de ausencia</label>
+                            <textarea id="settings-away-message" class="settings-input" rows="3" style="resize:vertical"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipedrive -->
+                <div class="settings-section">
+                    <h4 class="settings-section-title">🔗 Pipedrive — Envio de Leads</h4>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Configuracoes usadas ao enviar um lead manualmente ao Pipedrive.</p>
+                    <div class="settings-row">
+                        <div class="form-group" style="flex:1">
+                            <label>Funil</label>
+                            <select id="settings-pipeline" class="settings-input" onchange="loadSettingsStages(this.value)">
+                                <option value="">Carregando...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>Etapa inicial</label>
+                            <select id="settings-stage" class="settings-input">
+                                <option value="">Selecione o funil primeiro</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Proprietario do negocio</label>
+                        <select id="settings-owner" class="settings-input">
+                            <option value="">Nao atribuido</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="padding:16px 24px">
+                <button class="btn-secondary" onclick="closeSettingsModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveSettings()">💾 Salvar Configuracoes</button>
+            </div>
+        </div>
+
+        <!-- ABA USUARIOS (Admin only) -->
+        <div class="settings-tab-panel" id="stab-users" style="display:none">
+            <div class="modal-body" style="padding:24px;max-height:70vh;overflow-y:auto">
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+                    <h4 class="settings-section-title" style="margin:0">👥 Usuarios da plataforma</h4>
+                    <button class="btn-sm btn-primary" onclick="openAddUserForm()">+ Adicionar usuario</button>
+                </div>
+
+                <!-- Formulario de adicionar/editar usuario -->
+                <div id="user-form-wrap" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:14px" id="user-form-title">Novo usuario</div>
+                    <input type="hidden" id="uf-id" />
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                        <div class="form-group">
+                            <label>Nome completo</label>
+                            <input type="text" id="uf-name" class="settings-input" placeholder="Ana Silva" />
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail</label>
+                            <input type="email" id="uf-email" class="settings-input" placeholder="ana@branddi.com" />
+                        </div>
+                        <div class="form-group">
+                            <label>Senha</label>
+                            <input type="password" id="uf-password" class="settings-input" placeholder="••••••••" />
+                        </div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <select id="uf-role" class="settings-input">
+                                <option value="SDR">SDR</option>
+                                <option value="Closer">Closer</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="grid-column:1/-1">
+                            <label>Vincular ao usuario do Pipedrive</label>
+                            <select id="uf-pipedrive-user" class="settings-input">
+                                <option value="">— Nao vincular —</option>
+                            </select>
+                            <span style="font-size:11px;color:var(--text-muted)">O deal criado por este usuario sera atribuido a esta pessoa no Pipedrive</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+                        <button class="btn-sm btn-outline" onclick="closeAddUserForm()">Cancelar</button>
+                        <button class="btn-sm btn-primary" onclick="saveUser()">💾 Salvar</button>
+                    </div>
+                </div>
+
+                <!-- Lista de usuarios -->
+                <div id="users-list">
+                    <div style="text-align:center;padding:24px;color:var(--text-muted)">Carregando usuarios...</div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal: Historico de Mensagens -->
+<div class="modal-overlay" id="modal-history-msgs" style="display:none" onclick="if(event.target===this)closeModal('modal-history-msgs')">
+    <div class="modal" style="max-width:700px">
+        <div class="modal-header">
+            <h3 id="modal-history-title">💬 Historico da Conversa</h3>
+            <button class="modal-close" onclick="closeModal('modal-history-msgs')">✕</button>
+        </div>
+        <div class="modal-body" id="modal-history-body" style="padding:16px;max-height:65vh;overflow-y:auto">
+            <div class="loading-row">Carregando mensagens...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Notificacao de nova mensagem -->
+<div class="new-msg-notif" id="new-msg-notif" style="display:none">
+    <span class="notif-icon">💬</span>
+    <span id="notif-text">Nova mensagem</span>
+</div>
+
+<!-- Mobile Overlay -->
+<div class="mobile-overlay" id="mobile-overlay"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

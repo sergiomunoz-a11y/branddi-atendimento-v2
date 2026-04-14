@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Branddi Atendimento — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #001F2B; --surface: #002B36; --border: rgba(0,229,255,.1);
+      --accent: #00E5FF; --accent2: #00B8D4; --text: #E8F1F5;
+      --muted: #5C7A88; --red: #f85149; --radius: 12px;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background-image: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(0,229,255,.1) 0%, transparent 60%);
+    }
+    .login-card { width: 100%; max-width: 420px; padding: 48px 40px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,.5);
+      animation: fadeUp .4s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; justify-content: center; }
+    .logo-icon { width: 44px; height: 44px; background: linear-gradient(135deg, var(--accent), #00B8D4);
+      border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .logo-text { font-size: 20px; font-weight: 700; }
+    .logo-sub { font-size: 13px; color: var(--muted); text-align: center; }
+    h2 { font-size: 22px; font-weight: 600; margin-bottom: 6px; text-align: center; }
+    .subtitle { font-size: 14px; color: var(--muted); text-align: center; margin-bottom: 32px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--muted); }
+    .field input { width: 100%; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); font-size: 15px; font-family: inherit;
+      transition: border-color .2s, box-shadow .2s; outline: none; }
+    .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,170,.15); }
+    .btn-login { width: 100%; padding: 13px; background: linear-gradient(135deg, var(--accent), #00B8D4);
+      border: none; border-radius: var(--radius); color: #0d1117; font-size: 15px; font-weight: 700;
+      font-family: inherit; cursor: pointer; margin-top: 8px; transition: opacity .2s, transform .1s; }
+    .btn-login:hover { opacity: .9; }
+    .btn-login:active { transform: scale(.98); }
+    .btn-login:disabled { opacity: .5; cursor: not-allowed; }
+    .error-msg { display: none; background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.3);
+      color: #f85149; padding: 12px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; }
+    .error-msg.show { display: block; }
+    .footer-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="logo">
+      <div class="logo-icon"><img src="/logo-branddi.svg" alt="Branddi" width="28" height="28" /></div>
+      <div>
+        <div class="logo-text">Branddi</div>
+        <div class="logo-sub">Atendimento</div>
+      </div>
+    </div>
+    <h2>Bem-vindo de volta</h2>
+    <p class="subtitle">Entre com suas credenciais para acessar o sistema</p>
+    <div id="error-msg" class="error-msg"></div>
+    <form id="login-form">
+      <div class="field">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <label for="password">Senha</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn-login" id="btn-login">Entrar</button>
+    </form>
+    <p class="footer-note">Nao tem acesso? Fale com o administrador.</p>
+  </div>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-login');
+      const err = document.getElementById('error-msg');
+      const email = document.getElementById('email').value.trim();
+      const pass = document.getElementById('password').value;
+      btn.disabled = true; btn.textContent = 'Entrando...'; err.classList.remove('show');
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: pass }),
+        });
+        const data = await res.json();
+        if (!res.ok) { err.textContent = data.error || 'Erro ao fazer login.'; err.classList.add('show'); return; }
+        localStorage.setItem('ba_token', data.token);
+        localStorage.setItem('ba_user', JSON.stringify(data.user));
+        window.location.href = '/';
+      } catch {
+        err.textContent = 'Erro de conexao. Tente novamente.'; err.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>
