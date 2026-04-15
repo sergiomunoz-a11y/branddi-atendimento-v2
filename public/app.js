@@ -2437,29 +2437,35 @@ async function openDealContacts(dealId) {
         list.innerHTML = contacts.map(c => {
             const phones = c.phones || [];
             return phones.map(phone => `
-                <div class="deal-contact-item" data-person-id="${c.id}" data-phone="${escHtml(phone)}">
+                <div class="deal-contact-item deal-contact-clickable" data-person-id="${c.id}" data-phone="${escHtml(phone)}" data-name="${escHtml(c.name)}">
                     <div class="deal-contact-info">
                         <div class="deal-contact-name">${escHtml(c.name)}</div>
                         ${c.job_title ? `<div class="deal-contact-role">${escHtml(c.job_title)} — ${escHtml(c.org_name || '')}</div>` : ''}
                         <div class="deal-contact-phone">${escHtml(phone)}</div>
                     </div>
-                    <button class="btn-sm btn-outline deal-select-contact" data-person-id="${c.id}" data-phone="${escHtml(phone)}" data-name="${escHtml(c.name)}">Selecionar</button>
+                    <span class="deal-result-action">Iniciar →</span>
                 </div>
             `).join('');
         }).join('');
 
-        // Event delegation
-        list.onclick = (e) => {
-            const btn = e.target.closest('.deal-select-contact');
-            if (!btn) return;
-            list.querySelectorAll('.deal-contact-item').forEach(el => el.classList.remove('selected'));
-            btn.closest('.deal-contact-item').classList.add('selected');
+        // Click = seleciona e inicia conversa direto
+        list.onclick = async (e) => {
+            const item = e.target.closest('.deal-contact-clickable');
+            if (!item) return;
+
             _selectedContactForOutbound = {
-                person_id: btn.dataset.personId,
-                phone: btn.dataset.phone,
-                name: btn.dataset.name,
+                person_id: item.dataset.personId,
+                phone: item.dataset.phone,
+                name: item.dataset.name,
             };
-            if (form) form.style.display = '';
+
+            // Feedback visual
+            item.style.opacity = '0.5';
+            item.style.pointerEvents = 'none';
+            const actionEl = item.querySelector('.deal-result-action');
+            if (actionEl) actionEl.textContent = 'Criando...';
+
+            await sendOutbound();
         };
     } catch (err) {
         list.textContent = 'Erro: ' + err.message;
