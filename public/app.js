@@ -406,9 +406,9 @@ function renderConversationList() {
         const convType = conv.type || 'inbound';
         const typeLabel = convType === 'prospecting' ? '🚀 Prospeccao' : '📥 Inbound';
 
-        return `<div class="conv-item${isActive ? ' active' : ''}" data-id="${conv.id}" data-action="select-conversation">
+        return `<div class="conv-item${isActive ? ' active' : ''}${hasUnread ? ' unread' : ''}" data-id="${conv.id}" data-action="select-conversation">
             <div class="conv-item-top">
-                <span class="conv-name">${escHtml(name)} ${hasUnread ? '<span class="unread-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:4px"></span>' : ''}</span>
+                <span class="conv-name">${escHtml(name)}</span>
                 <span class="conv-time">${time}</span>
             </div>
             ${lead.company_name ? `<div class="conv-company">🏢 ${escHtml(lead.company_name)}</div>` : ''}
@@ -416,6 +416,7 @@ function renderConversationList() {
             <div class="conv-tags">
                 <span class="conv-type-badge ${convType}">${typeLabel}</span>
                 ${conv.status === 'waiting' ? '<span class="tag tag-waiting">⏳ Aguardando</span>' : ''}
+                ${hasUnread ? `<span class="tag tag-unread">${conv.unread_count} nova${conv.unread_count > 1 ? 's' : ''}</span>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -813,9 +814,12 @@ async function loadDealsForLead(lead, conv) {
     const notfound = document.getElementById('lp-deal-notfound');
     const listEl   = document.getElementById('lp-deal-list');
 
-    if (loading) loading.style.display  = '';
-    if (picker) picker.style.display    = 'none';
+    const hintEl = document.getElementById('lp-deal-hint');
+
+    if (loading) loading.style.display   = '';
+    if (picker) picker.style.display     = 'none';
     if (notfound) notfound.style.display = 'none';
+    if (hintEl) hintEl.style.display     = '';
 
     try {
         const data = await apiFetch(`/api/leads/${lead.id}/deals`);
@@ -872,22 +876,46 @@ async function loadDealsForLead(lead, conv) {
 }
 
 function selectDeal(itemEl, lead, conv) {
-    const listEl = document.getElementById('lp-deal-list');
-    if (listEl) {
-        listEl.querySelectorAll('.deal-picker-item').forEach(el => el.classList.remove('selected'));
-    }
-    itemEl.classList.add('selected');
-
     selectedDealId = itemEl.dataset.dealId;
     const dealTitle = itemEl.dataset.dealTitle;
+
+    const listEl = document.getElementById('lp-deal-list');
+    const hintEl = document.getElementById('lp-deal-hint');
+
+    // Colapsa lista — mostra só o deal selecionado em modo compacto
+    if (listEl) {
+        listEl.innerHTML = `
+            <div class="deal-selected-compact">
+                <div class="deal-selected-info">
+                    <div class="deal-picker-title">${escHtml(dealTitle)}</div>
+                    <div class="deal-picker-meta"><span class="deal-stage-badge">#${selectedDealId}</span></div>
+                </div>
+                <a href="https://brandmonitor.pipedrive.com/deal/${selectedDealId}" target="_blank" class="deal-picker-link" title="Ver no Pipedrive">↗</a>
+                <button class="btn-deal-change" id="btn-deal-change" title="Alterar deal">Alterar</button>
+            </div>`;
+
+        // Botão "Alterar" recarrega a lista completa
+        const btnChange = document.getElementById('btn-deal-change');
+        if (btnChange) {
+            btnChange.onclick = (e) => {
+                e.stopPropagation();
+                loadDealsForLead(lead, conv);
+            };
+        }
+    }
+    if (hintEl) hintEl.style.display = 'none';
 
     // Mostra seção de atividades
     const actSection = document.getElementById('lp-activities-section');
     if (actSection) actSection.style.display = '';
 
-    // Info do deal selecionado
+    // Info do deal selecionado acima dos botões
     const infoEl = document.getElementById('lp-selected-deal-info');
     if (infoEl) infoEl.innerHTML = `<span class="lp-muted">Deal:</span> <strong>#${selectedDealId}</strong> — ${escHtml(dealTitle)}`;
+
+    // Esconde "Nenhum deal vinculado"
+    const notfound = document.getElementById('lp-deal-notfound');
+    if (notfound) notfound.style.display = 'none';
 
     setupActivityButtons(conv, lead);
 }
