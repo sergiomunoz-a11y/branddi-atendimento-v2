@@ -135,15 +135,13 @@ router.get('/pipedrive/deal/:id/contacts', async (req, res) => {
     }
 });
 
-// ─── POST /api/pipedrive/start-outbound — Inicia conversa outbound ───
+// ─── POST /api/pipedrive/start-outbound — Cria conversa outbound (sem enviar msg)
+// SDR digita a primeira mensagem no inbox depois de criada
 router.post('/pipedrive/start-outbound', async (req, res) => {
     try {
-        const { deal_id, person_id, phone, first_message } = req.body;
+        const { deal_id, person_id, phone } = req.body;
         if (!deal_id || !person_id || !phone) {
             return res.status(400).json({ error: 'deal_id, person_id e phone são obrigatórios' });
-        }
-        if (!first_message) {
-            return res.status(400).json({ error: 'first_message é obrigatório' });
         }
 
         // Busca dados do person no Pipedrive
@@ -170,81 +168,44 @@ router.post('/pipedrive/start-outbound', async (req, res) => {
                 metadata: { pipedrive_deal_id: deal_id, pipedrive_person_id: person.id },
             });
         } else {
-            // Atualiza lead com dados do Pipedrive se não tinha
             const updates = {};
             if (!lead.crm_deal_id) updates.crm_deal_id = String(deal_id);
             if (!lead.crm_person_id) updates.crm_person_id = String(person.id);
             if (!lead.company_name && person.org_name) updates.company_name = person.org_name;
             if (!lead.name || lead.name === normalized) updates.name = person.name;
             if (Object.keys(updates).length > 0) {
-                const { updateLead: ul } = await import('../services/supabase.js');
-                await ul(lead.id, updates);
+                await updateLead(lead.id, updates);
             }
         }
 
-        // Inicia chat no WhatsApp via Unipile
-        const whatsappPhone = `55${normalized}`;
-        const chatResult = await startNewChat(whatsappPhone, first_message);
-        const chatId = chatResult?.id || chatResult?.chat_id;
-
-        if (!chatId) {
-            return res.status(500).json({ error: 'Falha ao iniciar chat no WhatsApp' });
-        }
-
-        // Cria conversa no Supabase
+        // Cria conversa no Supabase (sem chat_id ainda — será vinculado ao enviar a 1a msg)
         const conversation = await createConversation({
             lead_id: lead.id,
-            whatsapp_chat_id: chatId,
+            whatsapp_chat_id: null, // Será preenchido quando SDR enviar a 1a msg
             channel: 'whatsapp_direct',
             type: 'prospecting',
-            status: 'in_progress',
-            chatbot_stage: 'human', // Outbound = humano desde o início
+            status: 'waiting',
+            chatbot_stage: 'human',
             last_message_at: new Date().toISOString(),
         });
 
-        // Salva primeira mensagem
-        const { saveMessage } = await import('../services/supabase.js');
-        await saveMessage({
-            conversation_id: conversation.id,
-            direction: 'outbound',
-            sender_type: 'human',
-            sender_name: req.user?.name || 'SDR',
-            sent_by_user_id: req.user?.id || null,
-            sent_by_name: req.user?.name || null,
-            content: first_message,
-            attachments: [],
-            unipile_message_id: `outbound_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        });
+        // Atualiza campo "Canal de Comunicação" = WhatsApp (235)
+        try {
+            await pdPut(`/deals/${deal_id}`, {
+                '9f1041ce02d38f454f6aa5012ead87760c0741d2': '235',
+            });
+        } catch { /* não crítico */ }
 
-        // Cria atividade no Pipedrive
-        const now = new Date();
-        await pdPost('/activities', {
-            subject: `WhatsApp Outbound — ${person.name}`,
-            type: 'whatsapp',
-            deal_id: parseInt(deal_id),
-            person_id: parseInt(person_id),
-            due_date: now.toISOString().split('T')[0],
-            due_time: now.toTimeString().slice(0, 5),
-            done: 1,
-            note: `Primeira mensagem enviada via Branddi Atendimento:\n\n${first_message}`,
-            user_id: req.user?.pipedrive_user_id || undefined,
-        });
-
-        // Atualiza campo "Canal de Comunicação" = WhatsApp (235) e "Último ponto de contato"
-        await pdPut(`/deals/${deal_id}`, {
-            '9f1041ce02d38f454f6aa5012ead87760c0741d2': '235', // Canal = WhatsApp
-            '065610f68aea2ba189d2277f326a22f72b50358a': now.toISOString().split('T')[0], // Último contato
-        });
-
-        logger.info('Outbound started', {
+        logger.info('Outbound conversation created', {
             deal_id, person_id, phone: normalized, conversation_id: conversation.id,
         });
 
         res.json({
             success: true,
             conversation_id: conversation.id,
-            chat_id: chatId,
             lead_id: lead.id,
+            lead_name: person.name,
+            lead_phone: normalized,
         });
     } catch (err) {
         logger.error('Start outbound error', { error: err.message });

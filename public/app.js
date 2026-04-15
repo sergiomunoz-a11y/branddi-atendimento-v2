@@ -597,16 +597,23 @@ async function sendMsg() {
     const text  = (input?.value || '').trim();
     if (!text || !currentConversation) return;
 
-    const chatId = currentConversation.whatsapp_chat_id;
-    if (!chatId) { toast('Conversa sem chat ID vinculado', 'error'); return; }
+    const chatId = currentConversation.whatsapp_chat_id || null;
 
     input.value = '';
     input.style.height = '';
 
     try {
-        await apiFetch(`/api/messages/${currentConversation.id}/send`, {
+        const res = await apiFetch(`/api/messages/${currentConversation.id}/send`, {
             method: 'POST', body: JSON.stringify({ text, chatId }),
         });
+
+        // Se o chat foi iniciado agora, atualiza o chatId na conversa local
+        if (res.chat_started && !currentConversation.whatsapp_chat_id) {
+            await loadInbox();
+            currentConversation = allConversations.find(c => c.id === currentConversation.id) || currentConversation;
+        }
+
+        _lastMessagesHash = ''; // Força reload das mensagens
         await loadMessages(currentConversation.id);
     } catch (err) {
         toast(`Erro ao enviar: ${err.message}`, 'error');
@@ -2464,12 +2471,9 @@ async function sendOutbound() {
         toast('Selecione um contato primeiro', 'warning');
         return;
     }
-    const msgInput = document.getElementById('outbound-first-msg');
-    const text = (msgInput?.value || '').trim();
-    if (!text) { toast('Escreva a primeira mensagem', 'warning'); return; }
 
     const btn = document.getElementById('btn-send-outbound');
-    if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Criando conversa...'; }
 
     try {
         const res = await apiFetch('/api/pipedrive/start-outbound', {
@@ -2478,11 +2482,10 @@ async function sendOutbound() {
                 deal_id: _selectedDealForOutbound,
                 person_id: _selectedContactForOutbound.person_id,
                 phone: _selectedContactForOutbound.phone,
-                first_message: text,
             }),
         });
 
-        toast(`Conversa iniciada com ${_selectedContactForOutbound.name}!`, 'success');
+        toast(`Conversa com ${_selectedContactForOutbound.name} aberta no inbox!`, 'success');
 
         // Fecha modal e vai para o inbox
         closeDealContactsModal();
