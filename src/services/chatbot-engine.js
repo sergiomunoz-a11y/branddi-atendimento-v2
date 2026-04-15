@@ -31,77 +31,57 @@ import {
 } from './chatbot-nlp.js';
 import { findFAQAnswer } from './chatbot-faq.js';
 import { trackBotEvent } from './chatbot-workers.js';
+import { getBotMessage, getMaxRetries, getBrand } from './business-config.js';
 import logger from './logger.js';
 
-// ─── FLOW MESSAGES ───────────────────────────────────────────────────
+// ─── FLOW MESSAGES (loaded from config/business.yaml, with fallbacks) ─
 
 const FLOW = {
     welcome: {
-        message: (name) =>
-            `Olá${name ? `, ${name.split(' ')[0]}` : ''}! 👋 Sou o assistente da *Branddi*.\n\n` +
-            `Para te direcionar ao time certo, me conta:\n\n` +
-            `1️⃣  Quero conhecer os serviços da Branddi\n` +
-            `2️⃣  Recebi uma notificação da Branddi\n` +
-            `3️⃣  Sou cliente e tenho uma dúvida`,
+        message: (name) => {
+            const tpl = getBotMessage('welcome', 'Ola! Sou o assistente da *Branddi*.\n\n1 - Servicos\n2 - Notificacao\n3 - Duvida');
+            const prefix = name ? `, ${name.split(' ')[0]}` : '';
+            return tpl.replace('{{nome_prefix}}', prefix);
+        },
     },
     ask_company: {
-        message: (classification) => {
-            if (classification === 'opec') {
-                return `Entendido! 🙏 Para registrar corretamente, qual é o nome da sua *empresa*?`;
-            }
-            return `Que ótimo! 🚀 Qual é o nome da sua *empresa*?`;
-        },
+        message: (classification) =>
+            getBotMessage(`ask_company.${classification}`,
+                classification === 'opec'
+                    ? 'Entendido! Para registrar corretamente, qual e o nome da sua *empresa*?'
+                    : 'Que otimo! Qual e o nome da sua *empresa*?'),
     },
     ask_domain: {
-        message: () =>
-            `Qual é o endereço do *site* da sua empresa?\n_(ex: minhaempresa.com.br)_`,
+        message: () => getBotMessage('ask_domain', 'Qual e o endereco do *site* da sua empresa?'),
     },
     ask_context: {
-        message: () =>
-            `Perfeito! 😊 Em poucas palavras, qual é o *motivo do seu contato* com a Branddi?`,
+        message: () => getBotMessage('ask_context', 'Em poucas palavras, qual e o *motivo do seu contato*?'),
     },
     classified: {
-        message: (classification) => {
-            if (classification === 'opec') {
-                return `Perfeito! Registrei seu contato. Nosso time de *Operações* vai entrar em contato em breve. 🙏`;
-            }
-            return `Ótimo! Um especialista da Branddi vai continuar essa conversa em instantes. 🚀`;
-        },
+        message: (classification) =>
+            getBotMessage(`classified.${classification}`,
+                classification === 'opec'
+                    ? 'Perfeito! Nosso time de *Operacoes* vai entrar em contato em breve.'
+                    : 'Otimo! Um especialista vai continuar essa conversa em instantes.'),
     },
     retry: {
-        qualifying:
-            `Desculpe, não entendi bem. 😅 Por favor, responda com *1*, *2* ou *3*:\n\n` +
-            `1️⃣  Quero conhecer os serviços\n` +
-            `2️⃣  Recebi uma notificação\n` +
-            `3️⃣  Sou cliente com dúvida`,
-        domain_invalid:
-            `Hmm, não consegui identificar um site válido. 🤔\n` +
-            `Pode digitar o endereço completo? _(ex: suaempresa.com.br)_\n\n` +
-            `Se não tiver site, digite *pular* e seguimos!`,
+        qualifying: getBotMessage('retry.qualifying',
+            'Desculpe, nao entendi. Responda com *1*, *2* ou *3*:\n\n1 - Servicos\n2 - Notificacao\n3 - Duvida'),
+        domain_invalid: getBotMessage('retry.domain_invalid',
+            'Nao consegui identificar um site valido. Pode digitar o endereco completo?'),
     },
     media: {
-        audio:
-            `Recebi seu áudio! 🎤 Mas infelizmente sou um assistente de texto e não consigo ouvir. ` +
-            `Pode me enviar por escrito? 😊`,
-        image:
-            `Vi que enviou uma imagem! 📸 Consegue descrever por texto o que precisa? ` +
-            `Assim consigo te ajudar melhor! 😊`,
-        generic:
-            `Recebi seu arquivo! 📎 Para prosseguir no atendimento, ` +
-            `pode me responder por texto? 😊`,
+        audio:   getBotMessage('media.audio', 'Recebi seu audio! Pode me enviar por escrito?'),
+        image:   getBotMessage('media.image', 'Vi que enviou uma imagem! Consegue descrever por texto?'),
+        generic: getBotMessage('media.generic', 'Recebi seu arquivo! Pode me responder por texto?'),
     },
-    outsideHours:
-        `Olá! 👋 Nosso horário de atendimento é de *segunda a sexta, das 9h às 18h* (horário de Brasília).\n\n` +
-        `Sua mensagem foi registrada e nosso time responderá no próximo horário disponível! 🕘\n\n` +
-        `Enquanto isso, posso coletar algumas informações para agilizar seu atendimento:\n\n` +
-        `1️⃣  Quero conhecer os serviços da Branddi\n` +
-        `2️⃣  Recebi uma notificação da Branddi\n` +
-        `3️⃣  Sou cliente e tenho uma dúvida`,
+    outsideHours: getBotMessage('outside_hours',
+        'Nosso horario de atendimento e de segunda a sexta, 9h-18h. Sua mensagem foi registrada!'),
 };
 
 // ─── MAX RETRIES PER STAGE ──────────────────────────────────────────
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = getMaxRetries();
 
 // ─── PROCESSADOR PRINCIPAL ──────────────────────────────────────────
 

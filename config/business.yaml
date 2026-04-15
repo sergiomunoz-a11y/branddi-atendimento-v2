@@ -1,0 +1,94 @@
+# ================================================================
+# Branddi Atendimento — Business Configuration
+# Edite este arquivo para customizar o comportamento do chatbot
+# sem alterar codigo. Requer restart do servidor.
+# ================================================================
+
+brand:
+  name: "Branddi"
+  tagline: "Blindagem Digital de Marca"
+  website: "branddi.com"
+  tone: "profissional, acolhedor, objetivo"
+  language: "pt-BR"
+
+business_hours:
+  timezone: "America/Sao_Paulo"
+  weekdays:
+    start: "09:00"
+    end: "18:00"
+  weekend: false
+
+chatbot:
+  # Mensagem de boas-vindas
+  welcome: |
+    Ola{{nome_prefix}}! Sou o assistente da *Branddi*.
+
+    Para te direcionar ao time certo, me conta:
+
+    1 - Quero conhecer os servicos da Branddi
+    2 - Recebi uma notificacao da Branddi
+    3 - Sou cliente e tenho uma duvida
+
+  # Fora do horario
+  outside_hours: |
+    Ola! Nosso horario de atendimento e de *segunda a sexta, das 9h as 18h* (horario de Brasilia).
+
+    Sua mensagem foi registrada e nosso time respondera no proximo horario disponivel!
+
+    Enquanto isso, posso coletar algumas informacoes para agilizar:
+
+    1 - Quero conhecer os servicos da Branddi
+    2 - Recebi uma notificacao da Branddi
+    3 - Sou cliente e tenho uma duvida
+
+  # Perguntar empresa
+  ask_company:
+    comercial: "Que otimo! Qual e o nome da sua *empresa*?"
+    opec: "Entendido! Para registrar corretamente, qual e o nome da sua *empresa*?"
+
+  # Perguntar dominio
+  ask_domain: "Qual e o endereco do *site* da sua empresa? _(ex: minhaempresa.com.br)_"
+
+  # Perguntar contexto
+  ask_context: "Perfeito! Em poucas palavras, qual e o *motivo do seu contato* com a Branddi?"
+
+  # Classificacao concluida
+  classified:
+    comercial: "Otimo! Um especialista da Branddi vai continuar essa conversa em instantes."
+    opec: "Perfeito! Registrei seu contato. Nosso time de *Operacoes* vai entrar em contato em breve."
+
+  # Retries
+  retry:
+    qualifying: |
+      Desculpe, nao entendi bem. Por favor, responda com *1*, *2* ou *3*:
+
+      1 - Quero conhecer os servicos
+      2 - Recebi uma notificacao
+      3 - Sou cliente com duvida
+    domain_invalid: |
+      Hmm, nao consegui identificar um site valido.
+      Pode digitar o endereco completo? _(ex: suaempresa.com.br)_
+
+      Se nao tiver site, digite *pular* e seguimos!
+
+  # Respostas para midia
+  media:
+    audio: "Recebi seu audio! Mas infelizmente sou um assistente de texto e nao consigo ouvir. Pode me enviar por escrito?"
+    image: "Vi que enviou uma imagem! Consegue descrever por texto o que precisa? Assim consigo te ajudar melhor!"
+    generic: "Recebi seu arquivo! Para prosseguir no atendimento, pode me responder por texto?"
+
+  # Limites
+  max_retries: 3
+  escalation_message: "Nao consegui entender a necessidade. Vou te conectar com um atendente!"
+
+routing:
+  # Para onde cada classificacao vai
+  comercial: "comercial"
+  opec: "opec"
+  unclassified: "comercial"  # fallback
+
+  # Intencoes -> classificacao
+  intent_map:
+    servicos: "comercial"
+    notificacao: "opec"
+    cliente: "comercial"

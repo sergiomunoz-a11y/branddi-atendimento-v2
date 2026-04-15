@@ -8,6 +8,7 @@ import {
     findLeadByPhone, createLead, saveMessage, normalizePhone
 } from './supabase.js';
 import { processChatbotMessage } from './chatbot-engine.js';
+import whatsapp from '../providers/index.js';
 import logger from './logger.js';
 
 // ─── Config ───────────────────────────────────────────────────────────
@@ -138,21 +139,12 @@ async function processChat(chat) {
 
         if (!conversation) {
             const attendees = (await getChatAttendees(chat.id)).items || [];
-            const contact   = attendees.find(a => !a.is_self);
-            if (!contact) return;
-            logger.debug('Contact fields', {
-                keys: Object.keys(contact),
-                provider_id: contact.provider_id,
-                phone_number: contact.phone_number,
-                name: contact.name,
-            });
+            const rawContact = attendees.find(a => !a.is_self);
+            if (!rawContact) return;
 
-            const rawPhone = contact.phone_number
-                          || contact.phone
-                          || (!String(contact.provider_id || '').includes('@lid') && contact.provider_id)
-                          || contact.id
-                          || '';
-            const phone = normalizePhone(rawPhone);
+            // Normalize via provider abstraction
+            const contact = whatsapp.normalizeContact(rawContact);
+            const phone = normalizePhone(contact.phone);
             let lead = phone ? await findLeadByPhone(phone) : null;
 
             if (!lead) {
@@ -160,7 +152,7 @@ async function processChat(chat) {
                     name:   contact.name || phone || 'Desconhecido',
                     phone,
                     origin: 'whatsapp_direct',
-                    origin_metadata: { attendee_id: contact.provider_id },
+                    origin_metadata: { attendee_id: contact.providerId },
                 });
             }
 
@@ -180,28 +172,31 @@ async function processChat(chat) {
             new Date(m.timestamp) > new Date(_lastPollTime - 5_000)
         );
 
-        for (const msg of newMsgs) {
+        for (const rawMsg of newMsgs) {
+            // Normalize via provider abstraction
+            const msg = whatsapp.normalizeMessage(rawMsg);
+
             const saved = await saveMessage({
-                conversation_id:   conversation.id,
-                direction:         msg.is_sender ? 'outbound' : 'inbound',
-                sender_type:       msg.is_sender ? 'human' : 'lead',
-                sender_name:       msg.is_sender ? 'Atendente' : conversation.leads?.name || 'Lead',
-                content:           msg.text || '',
-                attachments:       msg.attachments || [],
+                conversation_id:    conversation.id,
+                direction:          msg.direction,
+                sender_type:        msg.direction === 'outbound' ? 'human' : 'lead',
+                sender_name:        msg.direction === 'outbound' ? 'Atendente' : conversation.leads?.name || 'Lead',
+                content:            msg.text,
+                attachments:        msg.attachments,
                 unipile_message_id: msg.id,
-                created_at:        msg.timestamp,
+                created_at:         msg.timestamp,
             });
 
             // v2: Se saveMessage retorna null, mensagem é duplicata — pula processamento
             if (!saved) continue;
 
             // v2: Reset bot_away_sent quando nova msg inbound chega em conversa humana
-            if (!msg.is_sender && conversation.chatbot_stage === 'human') {
+            if (msg.direction === 'inbound' && conversation.chatbot_stage === 'human') {
                 await updateConversation(conversation.id, { bot_away_sent: false });
             }
 
             // Processa chatbot apenas para mensagens inbound
-            if (!msg.is_sender && conversation.chatbot_stage !== 'human') {
+            if (msg.direction === 'inbound' && conversation.chatbot_stage !== 'human') {
                 await processChatbotMessage(conversation, msg.text || '', chat.id, msg.attachments || []);
             }
         }
