@@ -9,7 +9,7 @@ import {
 import { queueLeadSync } from '../services/crm-sync.js';
 import {
     createPerson, findPersonByPhone, findOrCreateOrg, createDeal,
-    findPersonWithDeals, pdGet, getPersonLabelOptions, updatePersonLabels
+    findPersonWithDeals, getDealsForPerson, pdGet, getPersonLabelOptions, updatePersonLabels
 } from '../services/pipedrive.js';
 import { validate } from '../middleware/validate.js';
 import supabase from '../services/supabase.js';
@@ -140,23 +140,38 @@ router.post('/leads/:id/sync-crm', async (req, res) => {
             ownerId    = await getSettingValue('pipedrive_owner_id', null);
         } catch { /* usa defaults */ }
 
-        // 4. Cria Deal
+        // 4. Busca deals existentes da pessoa ANTES de criar novo
         const meta  = lead.metadata || {};
-        const title = `${lead.name || 'Lead'} — ${lead.company_name || 'WhatsApp'} [Inbound WA]`;
-        const deal  = await createDeal({
-            title,
-            personId,
-            orgId,
-            pipelineId,
-            stageId,
-            ownerId:  ownerId ? parseInt(ownerId) : undefined,
-            label:    lead.classification === 'comercial' ? 'hot' : undefined,
-        });
+        let deal = null;
+        let dealAlreadyExisted = false;
+
+        if (personId) {
+            try {
+                const existingDeals = await getDealsForPerson(personId);
+                if (existingDeals.length > 0) {
+                    deal = existingDeals[0];
+                    dealAlreadyExisted = true;
+                }
+            } catch { /* se falhar, cria novo */ }
+        }
+
+        if (!deal) {
+            const title = `${lead.name || 'Lead'} — ${lead.company_name || 'WhatsApp'} [Inbound WA]`;
+            deal = await createDeal({
+                title,
+                personId,
+                orgId,
+                pipelineId,
+                stageId,
+                ownerId:  ownerId ? parseInt(ownerId) : undefined,
+                label:    lead.classification === 'comercial' ? 'hot' : undefined,
+            });
+        }
 
         if (!deal) return res.status(500).json({ error: 'Falha ao criar deal no Pipedrive' });
 
-        // 5. Nota com domínio e contexto
-        if (meta.domain || meta.context) {
+        // 5. Nota com domínio e contexto (só para deals novos)
+        if (!dealAlreadyExisted && (meta.domain || meta.context)) {
             const noteLines = [];
             if (meta.domain)  noteLines.push(`🌐 <b>Site:</b> ${meta.domain}`);
             if (meta.context) noteLines.push(`💬 <b>Contexto:</b> ${meta.context}`);
@@ -182,7 +197,9 @@ router.post('/leads/:id/sync-crm', async (req, res) => {
         res.json({
             success:     true,
             crm_deal_id: deal.id,
-            message:     `Deal #${deal.id} criado no funil Inbound SDR!`,
+            message:     dealAlreadyExisted
+                ? `Lead vinculado ao Deal existente #${deal.id}!`
+                : `Deal #${deal.id} criado no funil Inbound SDR!`,
         });
     } catch (err) {
         console.error('[sync-crm]', err.message);
