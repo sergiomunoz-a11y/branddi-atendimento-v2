@@ -23,20 +23,19 @@ router.get('/pipedrive/my-deals', async (req, res) => {
     try {
         const user = req.user || {};
         const pdUserId = user.pipedrive_user_id;
-        if (!pdUserId) return res.json({ deals: [], error: 'Usuário sem pipedrive_user_id vinculado' });
+        const isAdmin = user.role === 'Admin';
 
         // Pipelines outbound: 3 (Outbound BB/VM/Fraude), 29 (Outbound Automatizado), 5 (Inbound SDR)
         const pipelineIds = [3, 29, 5];
         const allDeals = [];
 
         for (const pipelineId of pipelineIds) {
-            const data = await pdGet(`/deals?pipeline_id=${pipelineId}&status=open&user_id=${pdUserId}&limit=100`);
+            // Admin sem pdUserId: busca todos. SDR: filtra por owner.
+            const userFilter = pdUserId ? `&user_id=${pdUserId}` : '';
+            const data = await pdGet(`/deals?pipeline_id=${pipelineId}&status=open${userFilter}&limit=100`);
             const deals = data?.data || [];
             allDeals.push(...deals);
         }
-
-        // Também busca deals onde o campo SDR (custom field) é o user
-        // Campo SDR key: 20f976931609c5737f13c241d05b450075815dfd
 
         // Enriquece com dados de person (telefone, nome)
         const enriched = allDeals.map(d => {

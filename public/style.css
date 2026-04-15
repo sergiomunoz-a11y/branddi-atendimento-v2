@@ -266,7 +266,7 @@ a.nav-btn { text-decoration: none; }
 
 /* ─── Tab Panels ────────────────────────────────────────────── */
 .tab-panel { display: none; height: 100%; overflow: hidden; }
-.tab-panel.active { display: flex; flex-direction: column; }
+.tab-panel.active { display: flex; flex-direction: column; overflow-y: auto; }
 
 /* ─── INBOX Layout ──────────────────────────────────────────── */
 .inbox-layout {

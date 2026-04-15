@@ -2346,14 +2346,18 @@ let _selectedContactForOutbound = null;
 async function loadDeals() {
     const grid = document.getElementById('deals-grid');
     if (!grid) return;
-    grid.textContent = 'Carregando deals do Pipedrive...';
+    grid.innerHTML = '<div class="empty-state-pro"><h4 class="empty-title">Carregando deals do Pipedrive...</h4></div>';
 
     try {
         const data = await apiFetch('/api/pipedrive/my-deals');
         _allDeals = data?.deals || [];
+        if (data?.error) {
+            grid.innerHTML = `<div class="empty-state-pro"><h4 class="empty-title">Aviso</h4><p class="empty-desc">${escHtml(data.error)}</p></div>`;
+            if (_allDeals.length === 0) return;
+        }
         renderDealsGrid();
     } catch (err) {
-        grid.textContent = 'Erro ao carregar deals: ' + err.message;
+        grid.innerHTML = `<div class="empty-state-pro"><h4 class="empty-title">Erro ao carregar deals</h4><p class="empty-desc">${escHtml(err.message)}</p></div>`;
     }
 }
 
