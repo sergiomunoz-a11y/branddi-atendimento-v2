@@ -359,7 +359,7 @@ export async function getSettingValue(key, defaultValue = null) {
     const { data } = await supabase
         .from('platform_settings')
         .select('value')
-        .eq('key', key)
+        .eq('setting_key', key)
         .single();
     return data?.value ?? defaultValue;
 }
@@ -368,8 +368,8 @@ export async function saveSetting(key, value) {
     const { data, error } = await supabase
         .from('platform_settings')
         .upsert(
-            { key, value, updated_at: new Date().toISOString() },
-            { onConflict: 'key' }
+            { setting_key: key, value, updated_at: new Date().toISOString() },
+            { onConflict: 'setting_key' }
         )
         .select()
         .single();
@@ -381,7 +381,7 @@ export async function getAllSettings() {
     const { data } = await supabase
         .from('platform_settings')
         .select('*');
-    return data || [];
+    return (data || []).map(s => ({ ...s, key: s.setting_key }));
 }
 
 /** Retorna settings como objeto key→value (usado por routes/settings.js) */
