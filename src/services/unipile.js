@@ -138,8 +138,10 @@ export function stopPolling() {
 async function processChat(chat) {
     try {
         let conversation = await findConversationByChat(chat.id);
+        let isNewConversation = false;
 
         if (!conversation) {
+            isNewConversation = true;
             const attendees = (await getChatAttendees(chat.id)).items || [];
             const rawContact = attendees.find(a => !a.is_self);
             if (!rawContact) return;
@@ -191,11 +193,14 @@ async function processChat(chat) {
             });
         }
 
-        // Busca mensagens novas (desde último poll)
-        const msgs  = await getMessages(chat.id, { limit: 10 });
-        const newMsgs = (msgs.items || []).filter(m =>
-            new Date(m.timestamp) > new Date(_lastPollTime - 5_000)
-        );
+        // Busca mensagens: conversa nova → importa histórico recente; existente → só desde último poll
+        const fetchLimit = isNewConversation ? 50 : 10;
+        const msgs  = await getMessages(chat.id, { limit: fetchLimit });
+        const allMsgs = msgs.items || [];
+
+        const newMsgs = isNewConversation
+            ? allMsgs  // Conversa nova: importa todas as mensagens disponíveis
+            : allMsgs.filter(m => new Date(m.timestamp) > new Date(_lastPollTime - 5_000));
 
         for (const rawMsg of newMsgs) {
             // Normalize via provider abstraction
