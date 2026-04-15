@@ -34,6 +34,38 @@ export async function pdPut(endpoint, data) {
     return res.json();
 }
 
+// ─── Phone normalization (BR) ────────────────────────────────────────
+
+function normalizePhoneTerms(phone) {
+    const digits = phone.replace(/\D/g, '');
+
+    // Remove country code 55 se presente
+    const local = digits.startsWith('55') && digits.length >= 12
+        ? digits.slice(2)
+        : digits;
+
+    // Gera termos de busca do mais específico ao menos
+    const terms = [];
+
+    // 1. Número local completo (DDD + celular = 10-11 dígitos)
+    if (local.length >= 10) terms.push(local);
+
+    // 2. Se celular sem 9° dígito (10 digs), tenta com 9 inserido
+    //    Se celular com 9° dígito (11 digs), tenta sem ele
+    if (local.length === 10) {
+        const ddd = local.slice(0, 2);
+        const num = local.slice(2);
+        terms.push(`${ddd}9${num}`); // adiciona 9° dígito
+    } else if (local.length === 11 && local[2] === '9') {
+        terms.push(local.slice(0, 2) + local.slice(3)); // remove 9° dígito
+    }
+
+    // 3. Últimos 8 dígitos (subscriber number sem DDD/prefixo)
+    if (digits.length >= 8) terms.push(digits.slice(-8));
+
+    return [...new Set(terms)]; // deduplica
+}
+
 // ─── Person ───────────────────────────────────────────────────────────
 
 export async function createPerson({ name, phone, email, company_name }) {
@@ -51,9 +83,14 @@ export async function createPerson({ name, phone, email, company_name }) {
 }
 
 export async function findPersonByPhone(phone) {
-    const term = phone.replace(/\D/g, '').slice(-9);
-    const res = await pdGet(`/persons/search?term=${term}&fields=phone&limit=1`);
-    return res.data?.items?.[0]?.item || null;
+    const terms = normalizePhoneTerms(phone);
+
+    for (const term of terms) {
+        const res = await pdGet(`/persons/search?term=${term}&fields=phone&limit=5`);
+        const items = res.data?.items || [];
+        if (items.length > 0) return items[0].item;
+    }
+    return null;
 }
 
 // ─── Organization ─────────────────────────────────────────────────────
@@ -115,15 +152,24 @@ export async function getDealsForPerson(personId) {
 }
 
 export async function findPersonWithDeals(phone) {
-    const term = phone.replace(/\D/g, '').slice(-9);
-    const res = await pdGet(`/persons/search?term=${term}&fields=phone&limit=5`);
-    const items = res.data?.items || [];
-
+    const terms = normalizePhoneTerms(phone);
+    const seenPersonIds = new Set();
     const results = [];
-    for (const item of items) {
-        const person = item.item;
-        const deals = await getDealsForPerson(person.id);
-        results.push({ person, deals });
+
+    for (const term of terms) {
+        const res = await pdGet(`/persons/search?term=${term}&fields=phone&limit=5`);
+        const items = res.data?.items || [];
+
+        for (const item of items) {
+            const person = item.item;
+            if (seenPersonIds.has(person.id)) continue;
+            seenPersonIds.add(person.id);
+
+            const deals = await getDealsForPerson(person.id);
+            results.push({ person, deals });
+        }
+
+        if (results.length > 0) break; // encontrou com este termo, não precisa tentar menos específico
     }
     return results;
 }
