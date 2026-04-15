@@ -127,9 +127,18 @@
                 <!-- Info do lead (avatar + nome + contato) -->
                 <div class="lp-section lp-contact-header">
                     <div class="lp-avatar" id="lp-avatar">?</div>
-                    <div class="lp-name" id="lp-name">—</div>
-                    <div class="lp-phone" id="lp-phone">—</div>
-                    <div class="lp-company" id="lp-company"></div>
+                    <div class="lp-editable-field" id="lp-name-wrap">
+                        <span class="lp-name" id="lp-name">—</span>
+                        <button class="lp-edit-btn" data-field="name" title="Editar nome">✏️</button>
+                    </div>
+                    <div class="lp-editable-field" id="lp-phone-wrap">
+                        <span class="lp-phone" id="lp-phone">—</span>
+                        <button class="lp-edit-btn" data-field="phone" title="Editar telefone">✏️</button>
+                    </div>
+                    <div class="lp-editable-field" id="lp-company-wrap">
+                        <span class="lp-company" id="lp-company"></span>
+                        <button class="lp-edit-btn" data-field="company_name" title="Editar empresa">✏️</button>
+                    </div>
                 </div>
 
                 <!-- Sobre a conversa -->

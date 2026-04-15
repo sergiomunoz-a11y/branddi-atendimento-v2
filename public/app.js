@@ -214,6 +214,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { setupEventDelegation(); } catch (e) { console.warn('setupEventDelegation:', e); }
     try { setupMobile(); } catch (e) { console.warn('setupMobile:', e); }
 
+    // Fix autofill: browser ignora autocomplete=off, limpamos via JS
+    document.querySelectorAll('.sidebar-search, .search-input').forEach(el => { el.value = ''; });
+
     try { loadInbox(); } catch (e) { console.warn('loadInbox:', e); }
     try { startPolling(); } catch (e) { console.warn('startPolling:', e); }
     try { checkHealth(); } catch (e) { console.warn('checkHealth:', e); }
@@ -440,6 +443,7 @@ async function selectConversation(convId) {
     currentConversation = allConversations.find(c => c.id === convId);
     if (!currentConversation) return;
 
+    _lastMessagesHash = ''; // Reset ao mudar de conversa
     renderConversationList();
     renderChatArea(currentConversation);
     renderLeadPanel(currentConversation);
@@ -502,6 +506,8 @@ function renderChatArea(conv) {
     autoResizeTextarea(document.getElementById('chat-input'));
 }
 
+let _lastMessagesHash = '';
+
 async function loadMessages(convId, chatId) {
     try {
         const data = await apiFetch(`/api/messages/${convId}`);
@@ -509,8 +515,17 @@ async function loadMessages(convId, chatId) {
         const wrap = document.getElementById('messages-wrap');
         if (!wrap) return;
 
+        // Hash check — evita re-render se nada mudou (elimina flicker do polling)
+        const newHash = msgs.map(m => `${m.id}:${m.created_at}`).join('|');
+        if (newHash === _lastMessagesHash) return;
+        _lastMessagesHash = newHash;
+
         if (msgs.length === 0) {
-            wrap.innerHTML = `<div class="empty-state"><p>Nenhuma mensagem ainda</p></div>`;
+            wrap.textContent = '';
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'Nenhuma mensagem ainda';
+            wrap.appendChild(empty);
             return;
         }
 
@@ -742,6 +757,9 @@ function renderLeadPanel(conv) {
         tagsEl.innerHTML = tags.length ? tags.join('') : '<span class="lp-muted">Sem tags</span>';
     }
 
+    // Edição inline de contato
+    setupInlineEdit(lead, conv);
+
     // Historico de conversas do lead
     renderLeadHistory(lead.id, conv.id);
 
@@ -749,6 +767,65 @@ function renderLeadPanel(conv) {
     renderConvEvents();
 
     renderScriptsPanelList();
+}
+
+// --- Inline Edit de contato ---
+function setupInlineEdit(lead, conv) {
+    document.querySelectorAll('.lp-edit-btn').forEach(btn => {
+        btn.onclick = () => {
+            const field = btn.dataset.field;
+            const wrap = btn.parentElement;
+            const span = wrap.querySelector('span');
+            const currentVal = field === 'phone' ? (lead.phone || '') :
+                               field === 'name' ? (lead.name || '') :
+                               (lead.company_name || '');
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'lp-inline-input';
+            input.value = currentVal;
+            if (field === 'phone') input.placeholder = '31971335127';
+            if (field === 'name') input.placeholder = 'Nome do contato';
+            if (field === 'company_name') input.placeholder = 'Empresa';
+
+            span.style.display = 'none';
+            btn.style.display = 'none';
+            wrap.insertBefore(input, btn);
+            input.focus();
+            input.select();
+
+            const save = async () => {
+                const newVal = input.value.trim();
+                if (newVal && newVal !== currentVal) {
+                    try {
+                        await apiFetch(`/api/leads/${lead.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ [field]: newVal }),
+                        });
+                        lead[field] = newVal;
+                        toast('Contato atualizado', 'success');
+                        renderLeadPanel(conv);
+                        loadInbox();
+                    } catch (err) {
+                        toast('Erro: ' + err.message, 'error');
+                    }
+                }
+                cancel();
+            };
+
+            const cancel = () => {
+                input.remove();
+                span.style.display = '';
+                btn.style.display = '';
+            };
+
+            input.addEventListener('keydown', e => {
+                if (e.key === 'Enter') save();
+                if (e.key === 'Escape') cancel();
+            });
+            input.addEventListener('blur', save);
+        };
+    });
 }
 
 // --- Lead History (other conversations of the same lead) ---
