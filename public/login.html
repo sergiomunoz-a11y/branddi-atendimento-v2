@@ -21,10 +21,7 @@
       border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,.5);
       animation: fadeUp .4s ease; }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; justify-content: center; }
-    .logo-icon { width: 44px; height: 44px; background: linear-gradient(135deg, var(--accent), #00B8D4);
-      border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
-    .logo-text { font-size: 20px; font-weight: 700; }
+    .logo { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 36px; }
     .logo-sub { font-size: 13px; color: var(--muted); text-align: center; }
     h2 { font-size: 22px; font-weight: 600; margin-bottom: 6px; text-align: center; }
     .subtitle { font-size: 14px; color: var(--muted); text-align: center; margin-bottom: 32px; }
@@ -44,49 +41,146 @@
       color: #f85149; padding: 12px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; }
     .error-msg.show { display: block; }
     .footer-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 24px 0; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .divider span { font-size: 12px; color: var(--muted); }
+    .btn-google { width: 100%; padding: 12px; background: #FFFFFF; border: 1px solid #dadce0;
+      border-radius: var(--radius); color: #3c4043; font-size: 14px; font-weight: 600;
+      font-family: inherit; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; gap: 10px; transition: background .15s, box-shadow .15s; }
+    .btn-google:hover { background: #f7f8f8; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+    .btn-google:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-google svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .email-form { display: none; }
+    .email-form.show { display: block; }
+    .toggle-email { background: none; border: none; color: var(--accent); font-size: 12px;
+      cursor: pointer; text-decoration: underline; margin-top: 12px; display: block; text-align: center; width: 100%; }
   </style>
 </head>
 <body>
   <div class="login-card">
-    <div class="logo" style="flex-direction:column;gap:8px">
+    <div class="logo">
       <img src="/logo-branddi.svg" alt="Branddi" style="width:160px;height:auto" />
       <div class="logo-sub">Atendimento</div>
     </div>
-    <h2>Bem-vindo de volta</h2>
-    <p class="subtitle">Entre com suas credenciais para acessar o sistema</p>
+    <h2>Bem-vindo</h2>
+    <p class="subtitle" id="login-subtitle">Entre com sua conta Google institucional</p>
     <div id="error-msg" class="error-msg"></div>
-    <form id="login-form">
-      <div class="field">
-        <label for="email">E-mail</label>
-        <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" required>
-      </div>
-      <div class="field">
-        <label for="password">Senha</label>
-        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn-login" id="btn-login">Entrar</button>
-    </form>
-    <p class="footer-note">Nao tem acesso? Fale com o administrador.</p>
+
+    <div id="google-btn-wrap">
+      <button class="btn-google" id="btn-google" type="button">
+        <svg viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Entrar com Google
+      </button>
+    </div>
+
+    <button class="toggle-email" id="toggle-email">Entrar com e-mail e senha</button>
+
+    <div class="email-form" id="email-form">
+      <div class="divider"><span>ou</span></div>
+      <form id="login-form">
+        <div class="field">
+          <label for="email">E-mail</label>
+          <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label for="password">Senha</label>
+          <input type="password" id="password" placeholder="........" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-login" id="btn-login">Entrar</button>
+      </form>
+    </div>
+
+    <p class="footer-note">Apenas contas @branddi.com sao aceitas</p>
   </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
+    const API = '';
+
+    document.getElementById('toggle-email').addEventListener('click', function() {
+      document.getElementById('email-form').classList.toggle('show');
+    });
+
+    async function initGoogleLogin() {
+      try {
+        const res = await fetch(API + '/api/auth/google-client-id');
+        const data = await res.json();
+        if (!data.client_id) {
+          document.getElementById('google-btn-wrap').style.display = 'none';
+          document.getElementById('email-form').classList.add('show');
+          document.getElementById('login-subtitle').textContent = 'Entre com suas credenciais';
+          document.getElementById('toggle-email').style.display = 'none';
+          return;
+        }
+
+        document.getElementById('btn-google').addEventListener('click', function() {
+          var btn = this;
+          btn.disabled = true;
+          btn.textContent = 'Abrindo Google...';
+
+          google.accounts.id.initialize({
+            client_id: data.client_id,
+            callback: handleGoogleResponse,
+            auto_select: false,
+          });
+          google.accounts.id.prompt(function(notification) {
+            btn.disabled = false;
+            btn.textContent = 'Entrar com Google';
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+              google.accounts.id.renderButton(
+                document.getElementById('google-btn-wrap'),
+                { theme: 'filled_blue', size: 'large', width: 340 }
+              );
+            }
+          });
+        });
+      } catch (e) {
+        document.getElementById('google-btn-wrap').style.display = 'none';
+        document.getElementById('email-form').classList.add('show');
+        document.getElementById('toggle-email').style.display = 'none';
+      }
+    }
+
+    async function handleGoogleResponse(response) {
+      var err = document.getElementById('error-msg');
+      err.classList.remove('show');
+      try {
+        var res = await fetch(API + '/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential }),
+        });
+        var data = await res.json();
+        if (!res.ok) { err.textContent = data.error; err.classList.add('show'); return; }
+        localStorage.setItem('ba_token', data.token);
+        localStorage.setItem('ba_user', JSON.stringify(data.user));
+        window.location.href = '/';
+      } catch (e) {
+        err.textContent = 'Erro de conexao.'; err.classList.add('show');
+      }
+    }
+
+    initGoogleLogin();
+
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
       e.preventDefault();
-      const btn = document.getElementById('btn-login');
-      const err = document.getElementById('error-msg');
-      const email = document.getElementById('email').value.trim();
-      const pass = document.getElementById('password').value;
+      var btn = document.getElementById('btn-login');
+      var err = document.getElementById('error-msg');
+      var email = document.getElementById('email').value.trim();
+      var pass = document.getElementById('password').value;
       btn.disabled = true; btn.textContent = 'Entrando...'; err.classList.remove('show');
       try {
-        const res = await fetch('/api/auth/login', {
+        var res = await fetch(API + '/api/auth/login', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password: pass }),
+          body: JSON.stringify({ email: email, password: pass }),
         });
-        const data = await res.json();
+        var data = await res.json();
         if (!res.ok) { err.textContent = data.error || 'Erro ao fazer login.'; err.classList.add('show'); return; }
         localStorage.setItem('ba_token', data.token);
         localStorage.setItem('ba_user', JSON.stringify(data.user));
         window.location.href = '/';
-      } catch {
+      } catch (e) {
         err.textContent = 'Erro de conexao. Tente novamente.'; err.classList.add('show');
       } finally {
         btn.disabled = false; btn.textContent = 'Entrar';

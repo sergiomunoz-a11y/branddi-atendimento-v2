@@ -1,8 +1,14 @@
 /**
- * WhatsApp Account Routes — Gerencia conexão via QR Code
- * Espelha a lógica validada no prospecting-engine-v2
+ * WhatsApp Account Routes — Gerencia conexao via QR Code + controle de acesso
+ *
+ * Regras de acesso:
+ * - Admin ve e usa todas as contas
+ * - Quando user conecta numero novo → fica disponivel so pra ele + Admin
+ * - Admin pode autorizar outros users via permissions.whatsapp_accounts
  */
 import { Router } from 'express';
+import supabase from '../services/supabase.js';
+import logger from '../services/logger.js';
 
 const router = Router();
 
@@ -10,14 +16,14 @@ const router = Router();
 
 function getUnipileConfig() {
     const key = process.env.UNIPILE_API_KEY;
-    const dsn  = process.env.UNIPILE_DSN;
+    const dsn = process.env.UNIPILE_DSN;
     if (!key || !dsn) return null;
     return { key, base: `https://${dsn}/api/v1` };
 }
 
 async function unipileFetch(endpoint, options = {}, timeoutMs = 10000) {
     const config = getUnipileConfig();
-    if (!config) throw new Error('Unipile não configurado (UNIPILE_API_KEY / UNIPILE_DSN ausentes)');
+    if (!config) throw new Error('Unipile nao configurado');
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -28,68 +34,111 @@ async function unipileFetch(endpoint, options = {}, timeoutMs = 10000) {
             signal: controller.signal,
             headers: {
                 'X-API-KEY': config.key,
-                'Accept':    'application/json',
+                'Accept': 'application/json',
                 ...(options.headers || {}),
             },
         });
-
         if (!res.ok) {
             const err = await res.text();
-            throw new Error(`Unipile API error (${res.status}): ${err}`);
+            throw new Error(`Unipile (${res.status}): ${err}`);
         }
         return res.json();
     } catch (err) {
-        if (err.name === 'AbortError') throw new Error(`Timeout (${timeoutMs/1000}s) — Unipile não respondeu`);
+        if (err.name === 'AbortError') throw new Error(`Timeout — Unipile nao respondeu`);
         throw err;
     } finally {
         clearTimeout(timer);
     }
 }
 
-// ─── GET /api/whatsapp/accounts — Lista contas conectadas ─────────────
+// ─── GET /api/whatsapp/accounts — Lista contas com controle de acesso ─
 router.get('/whatsapp/accounts', async (req, res) => {
     try {
-        const config = getUnipileConfig();
-        console.log('[WA] Listing accounts. Config:', config ? `base=${config.base}` : 'NOT CONFIGURED');
-
         const data = await unipileFetch('/accounts', {}, 8000);
         const all = data.items || (Array.isArray(data) ? data : []);
-        console.log('[WA] Raw accounts:', JSON.stringify(all.slice(0,3)));
 
         let accounts = all.filter(
             a => (a.type || '').toUpperCase() === 'WHATSAPP' || (a.provider || '').toUpperCase() === 'WHATSAPP'
         );
 
-        // Filtra por permissão: non-Admin só vê contas autorizadas
-        const user = req.user || {};
-        const permissions = user.permissions || {};
-        if (user.role !== 'Admin' && Array.isArray(permissions.whatsapp_accounts) && permissions.whatsapp_accounts.length > 0) {
-            accounts = accounts.filter(a => permissions.whatsapp_accounts.includes(a.id));
+        // Sync com tabela local whatsapp_accounts
+        for (const acc of accounts) {
+            await syncAccountToLocal(acc);
         }
 
-        res.json({ accounts });
+        // Busca registros locais para enriquecer com connected_by info
+        const { data: localAccounts } = await supabase
+            .from('whatsapp_accounts')
+            .select('unipile_account_id, phone_number, label, connected_by_user_id, status');
+
+        const localMap = {};
+        for (const la of (localAccounts || [])) {
+            localMap[la.unipile_account_id] = la;
+        }
+
+        // Filtra por permissao
+        const user = req.user || {};
+        const isAdmin = user.role === 'Admin';
+        const permissions = user.permissions || {};
+        const allowedIds = permissions.whatsapp_accounts || [];
+
+        const enriched = accounts.map(a => {
+            const local = localMap[a.id] || {};
+            return {
+                id: a.id,
+                phone_number: a.connection_params?.im?.phone_number || local.phone_number || null,
+                name: a.name || local.label || null,
+                status: a.connection_status || a.status || local.status || 'unknown',
+                connected_by_user_id: local.connected_by_user_id || null,
+                is_mine: local.connected_by_user_id === user.id,
+            };
+        });
+
+        // Admin ve tudo. User ve: suas proprias + autorizadas via permissions
+        let filtered = enriched;
+        if (!isAdmin) {
+            filtered = enriched.filter(a =>
+                a.is_mine || allowedIds.includes(a.id)
+            );
+        }
+
+        res.json({ accounts: filtered });
     } catch (err) {
-        console.warn('[WA] Accounts error:', err.message);
+        logger.warn('WA accounts error', { error: err.message });
         res.json({ accounts: [], error: err.message });
     }
 });
 
-// ─── POST /api/whatsapp/connect — Inicia conexão (retorna QR Code) ────
-// A Unipile pode demorar até ~25s para retornar o checkpoint com o QR.
-// Usamos timeout de 35s para garantir.
+// ─── POST /api/whatsapp/connect — Conecta novo numero (QR Code) ──────
 router.post('/whatsapp/connect', async (req, res) => {
-    console.log('[WA] Iniciando conexão WhatsApp via Unipile...');
     try {
         const result = await unipileFetch('/accounts', {
-            method:  'POST',
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ provider: 'WHATSAPP' }),
-        }, 35000); // 35s de timeout para o QR
+            body: JSON.stringify({ provider: 'WHATSAPP' }),
+        }, 35000);
 
-        console.log('[WA] Connect result object:', result?.object, '| checkpoint type:', result?.checkpoint?.type);
+        // Se a conta foi criada, registra localmente vinculada ao user
+        const accountId = result?.account_id || result?.id;
+        if (accountId) {
+            await supabase.from('whatsapp_accounts').upsert({
+                unipile_account_id: accountId,
+                connected_by_user_id: req.user?.id || null,
+                phone_number: result?.connection_params?.im?.phone_number || null,
+                label: req.user?.name ? `${req.user.name}` : null,
+                status: 'connecting',
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'unipile_account_id' });
+
+            // Auto-adiciona nas permissoes do user que conectou
+            if (req.user?.id) {
+                await addAccountToUserPermissions(req.user.id, accountId);
+            }
+        }
+
         res.json(result);
     } catch (err) {
-        console.error('[WA] Connect error:', err.message);
+        logger.error('WA connect error', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -98,10 +147,52 @@ router.post('/whatsapp/connect', async (req, res) => {
 router.delete('/whatsapp/accounts/:id', async (req, res) => {
     try {
         await unipileFetch(`/accounts/${req.params.id}`, { method: 'DELETE' }, 8000);
+
+        // Atualiza registro local
+        await supabase
+            .from('whatsapp_accounts')
+            .update({ status: 'disconnected', updated_at: new Date().toISOString() })
+            .eq('unipile_account_id', req.params.id);
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+
+async function syncAccountToLocal(acc) {
+    try {
+        const phone = acc.connection_params?.im?.phone_number || null;
+        await supabase.from('whatsapp_accounts').upsert({
+            unipile_account_id: acc.id,
+            phone_number: phone,
+            status: acc.connection_status || acc.status || 'unknown',
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'unipile_account_id', ignoreDuplicates: false });
+    } catch { /* sync nao critico */ }
+}
+
+async function addAccountToUserPermissions(userId, accountId) {
+    try {
+        const { data: user } = await supabase
+            .from('platform_users')
+            .select('permissions')
+            .eq('id', userId)
+            .single();
+
+        const perms = user?.permissions || {};
+        const waAccounts = perms.whatsapp_accounts || [];
+        if (!waAccounts.includes(accountId)) {
+            waAccounts.push(accountId);
+            perms.whatsapp_accounts = waAccounts;
+            await supabase
+                .from('platform_users')
+                .update({ permissions: perms, updated_at: new Date().toISOString() })
+                .eq('id', userId);
+        }
+    } catch { /* nao critico */ }
+}
 
 export default router;
