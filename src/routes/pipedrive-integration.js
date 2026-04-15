@@ -165,7 +165,6 @@ router.post('/pipedrive/start-outbound', async (req, res) => {
                 classification: 'comercial',
                 crm_person_id: String(person.id),
                 crm_deal_id: String(deal_id),
-                metadata: { pipedrive_deal_id: deal_id, pipedrive_person_id: person.id },
             });
         } else {
             const updates = {};
