@@ -1470,26 +1470,40 @@ function renderScriptsGrid() {
     let filtered = allScripts;
     if (currentScriptCat) filtered = filtered.filter(s => s.category === currentScriptCat);
 
+    // Filtro de visibilidade (público/meus/todos)
+    const visFilter = document.getElementById('scripts-visibility-filter')?.value || 'all';
+    if (visFilter === 'public') filtered = filtered.filter(s => s.is_public !== false);
+    else if (visFilter === 'mine') filtered = filtered.filter(s => s.owner_user_id === currentUser?.id);
+
     if (filtered.length === 0) {
         grid.innerHTML = `<div class="empty-state"><p>Nenhum script nesta categoria</p></div>`;
         return;
     }
 
-    grid.innerHTML = filtered.map(s => `
-        <div class="script-card">
+    const userId = currentUser?.id;
+    const isAdmin = currentUser?.role === 'Admin';
+
+    grid.innerHTML = filtered.map(s => {
+        const isMine = s.owner_user_id === userId;
+        const canEdit = isMine || isAdmin || !s.owner_user_id;
+        const privacyBadge = s.is_public === false
+            ? `<span class="tag" style="background:rgba(139,92,246,.15);color:#a78bfa;font-size:10px">🔒 Pessoal</span>`
+            : '';
+        return `
+        <div class="script-card${s.is_public === false ? ' script-private' : ''}">
             <div class="script-card-header">
-                <div class="script-card-title">${escHtml(s.title)}</div>
+                <div class="script-card-title">${escHtml(s.title)} ${privacyBadge}</div>
                 <div class="script-card-actions">
-                    <button class="icon-btn" data-action="edit-script" data-id="${s.id}" title="Editar">✏️</button>
-                    <button class="icon-btn danger" data-action="delete-script" data-id="${s.id}" title="Remover">🗑</button>
+                    ${canEdit ? `<button class="icon-btn" data-action="edit-script" data-id="${s.id}" title="Editar">✏️</button>
+                    <button class="icon-btn danger" data-action="delete-script" data-id="${s.id}" title="Remover">🗑</button>` : ''}
                 </div>
             </div>
             <div class="script-card-category">
                 <span class="tag tag-${s.category === 'comercial' ? 'comercial' : s.category === 'opec' ? 'opec' : 'wa'}">${catLabel(s.category)}</span>
             </div>
             <div class="script-card-content">${escHtml(s.content)}</div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function setupScriptForm() {
@@ -1500,13 +1514,25 @@ function setupScriptForm() {
         openModal('modal-script');
     });
 
+    // Toggle de visibilidade — atualiza label
+    document.getElementById('script-is-public')?.addEventListener('change', e => {
+        const label = document.getElementById('script-visibility-label');
+        if (label) label.textContent = e.target.checked
+            ? 'Público — visível para toda a equipe'
+            : 'Pessoal — só você vê este script';
+    });
+
+    // Filtro de visibilidade no painel
+    document.getElementById('scripts-visibility-filter')?.addEventListener('change', () => renderScriptsGrid());
+
     document.getElementById('form-script')?.addEventListener('submit', async e => {
         e.preventDefault();
         const id = document.getElementById('script-id').value;
         const payload = {
-            category: document.getElementById('script-category').value,
-            title:    document.getElementById('script-title').value,
-            content:  document.getElementById('script-content').value,
+            category:  document.getElementById('script-category').value,
+            title:     document.getElementById('script-title').value,
+            content:   document.getElementById('script-content').value,
+            is_public: document.getElementById('script-is-public')?.checked ?? true,
         };
         try {
             if (id) {
@@ -1528,6 +1554,10 @@ function openScriptEditor() {
     document.getElementById('modal-script-title').textContent = 'Novo Script';
     document.getElementById('script-id').value = '';
     document.getElementById('form-script')?.reset();
+    const pub = document.getElementById('script-is-public');
+    if (pub) pub.checked = true;
+    const label = document.getElementById('script-visibility-label');
+    if (label) label.textContent = 'Público — visível para toda a equipe';
     openModal('modal-script');
 }
 
@@ -1548,6 +1578,12 @@ function editScript(scriptId) {
     document.getElementById('script-category').value = s.category;
     document.getElementById('script-title').value = s.title;
     document.getElementById('script-content').value = s.content;
+    const pub = document.getElementById('script-is-public');
+    if (pub) pub.checked = s.is_public !== false;
+    const label = document.getElementById('script-visibility-label');
+    if (label) label.textContent = s.is_public !== false
+        ? 'Público — visível para toda a equipe'
+        : 'Pessoal — só você vê este script';
     openModal('modal-script');
 }
 
@@ -1602,10 +1638,18 @@ function setupCurrentUser() {
         <button class="btn-logout" data-action="logout" title="Sair">&#x2715;</button>
     `;
 
+    const isAdmin = currentUser.role === 'Admin';
+
     // Admin ve o link de usuarios nas configuracoes
-    if (currentUser.role === 'Admin') {
+    if (isAdmin) {
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
     }
+
+    // Visibilidade por role: Dashboard e Simulador só para Admin
+    const dashTab = document.getElementById('tab-dashboard');
+    if (dashTab) dashTab.style.display = isAdmin ? '' : 'none';
+    const simBtn = document.getElementById('btn-simulator');
+    if (simBtn) simBtn.style.display = isAdmin ? '' : 'none';
 }
 
 

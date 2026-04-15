@@ -15,7 +15,10 @@
 <!-- ─── Side Nav ─────────────────────────────────────────────── -->
 <nav class="side-nav">
     <div class="side-nav-brand" title="Branddi Atendimento v2">
-        <img src="/logo-branddi.svg" alt="Branddi" style="width:40px;height:auto" />
+        <svg width="32" height="32" viewBox="0 0 135 203" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M71.3695 118.333L58.0337 104.944C57.1945 107.772 55.6961 110.329 53.6283 112.405L14.1301 152.06C13.291 152.903 12.8115 154.046 12.8115 155.249C12.8115 156.453 13.291 157.596 14.1301 158.439L43.9486 188.375L70.0509 162.079C82.2181 148.961 83.9862 130.999 71.3695 118.302V118.333Z" fill="#4BBECD"/>
+            <path d="M116.741 70.6442L50.032 3.7007C47.6645 1.32383 44.5179 0 41.1614 0C37.805 0 34.6583 1.32383 32.2908 3.7007L3.64115 32.5541C-1.21372 37.4583 -1.21372 45.4313 3.64115 50.3355L39.0037 85.9284L45.8664 92.8484C49.6125 96.7297 49.5825 102.928 45.7765 106.779L6.27835 146.433C3.91086 148.81 2.59226 151.969 2.59226 155.339C2.59226 158.709 3.91086 161.868 6.27835 164.245L43.8885 202.004L74.8757 170.894L116.741 128.863C132.715 112.826 132.715 86.7107 116.741 70.6743V70.6442ZM70.0508 162.109L43.9485 188.405L14.13 158.468C13.2909 157.626 12.8114 156.482 12.8114 155.279C12.8114 154.075 13.2909 152.932 14.13 152.09L53.6282 112.435C55.696 110.359 57.1945 107.802 58.0336 104.973L71.3695 118.362C83.9861 131.029 82.218 149.021 70.0508 162.139V162.109ZM109.999 122.093L89.8299 142.342C90.0097 130.517 85.4845 119.114 77.0035 110.6L52.7592 86.2594L10.384 43.596C9.21524 42.4226 9.21524 40.4971 10.384 39.3237L39.0337 10.4703C40.1725 9.32697 42.1504 9.32697 43.2892 10.4703L109.999 77.4439C122.256 89.7495 122.256 109.787 109.999 122.093Z" fill="white"/>
+        </svg>
     </div>
     <div class="side-nav-links">
         <button class="nav-btn active" data-tab="inbox" id="tab-inbox" title="Inbox">
@@ -23,13 +26,13 @@
             <span class="nav-label">Inbox</span>
             <span class="nav-badge" id="badge-inbox">0</span>
         </button>
+        <button class="nav-btn" data-tab="deals" id="tab-deals" title="Deals Pipedrive">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-pipedrive"></use></svg></span>
+            <span class="nav-label">Deals</span>
+        </button>
         <button class="nav-btn" data-tab="leads" id="tab-leads" title="Leads">
             <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-users"></use></svg></span>
             <span class="nav-label">Leads</span>
-        </button>
-        <button class="nav-btn" data-tab="dashboard" id="tab-dashboard" title="Dashboard">
-            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-chart"></use></svg></span>
-            <span class="nav-label">Dashboard</span>
         </button>
         <button class="nav-btn" data-tab="scripts" id="tab-scripts" title="Scripts">
             <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-clipboard"></use></svg></span>
@@ -39,15 +42,15 @@
             <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-clock"></use></svg></span>
             <span class="nav-label">Histórico</span>
         </button>
-        <button class="nav-btn" data-tab="deals" id="tab-deals" title="Deals Pipedrive">
+        <button class="nav-btn" data-tab="dashboard" id="tab-dashboard" title="Dashboard" style="display:none">
             <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-chart"></use></svg></span>
-            <span class="nav-label">Deals</span>
+            <span class="nav-label">Dashboard</span>
         </button>
     </div>
     <div class="side-nav-bottom">
         <!-- Usuário logado (injetado via JS) -->
         <div id="side-nav-user"></div>
-        <a href="/simulate.html" class="nav-btn" title="Simulador do Bot" id="btn-simulator" target="_blank">
+        <a href="/simulate.html" class="nav-btn" title="Simulador do Bot" id="btn-simulator" target="_blank" style="display:none">
             <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-bot"></use></svg></span>
             <span class="nav-label">Simulador</span>
         </a>
@@ -363,7 +366,14 @@
 <section class="tab-panel" id="panel-scripts">
     <div class="panel-header">
         <h2 class="panel-title">Scripts de Atendimento</h2>
-        <button class="btn-primary" id="btn-new-script">+ Novo Script</button>
+        <div class="panel-actions" style="display:flex;gap:8px;align-items:center">
+            <select class="filter-select" id="scripts-visibility-filter" style="min-width:140px">
+                <option value="all">Todos os scripts</option>
+                <option value="public">Públicos</option>
+                <option value="mine">Meus scripts</option>
+            </select>
+            <button class="btn-primary" id="btn-new-script">+ Novo Script</button>
+        </div>
     </div>
     <div class="scripts-categories" id="scripts-categories">
         <button class="script-cat-btn active" data-cat="">Todos</button>
@@ -478,6 +488,12 @@
             <div class="form-group">
                 <label>Mensagem <span class="label-hint">Use {{nome}}, {{empresa}}, {{data}}</span></label>
                 <textarea id="script-content" rows="6" placeholder="Digite a mensagem..." required></textarea>
+            </div>
+            <div class="form-group">
+                <label class="toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="script-is-public" checked />
+                    <span id="script-visibility-label">Público — visível para toda a equipe</span>
+                </label>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" onclick="closeModal('modal-script')">Cancelar</button>

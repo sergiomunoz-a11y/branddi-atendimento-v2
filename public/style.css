@@ -913,6 +913,10 @@ a.nav-btn { text-decoration: none; }
     padding: 0;
     overflow: hidden;
 }
+#panel-dashboard.active {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
 
 .panel-header {
     padding: 20px 24px;
@@ -1008,13 +1012,18 @@ a.nav-btn { text-decoration: none; }
     grid-template-columns: 2fr 1fr 1fr;
     gap: 16px;
     padding: 0 24px 24px;
-    flex: 1; overflow: auto;
+    flex-shrink: 0;
 }
 .chart-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 20px;
+    max-height: 320px;
+    overflow: hidden;
+}
+.chart-card canvas {
+    max-height: 240px !important;
 }
 .chart-title { font-size: var(--text-sm); font-weight: var(--fw-semibold); color: var(--text-secondary); margin-bottom: 16px; }
 
@@ -1055,6 +1064,7 @@ a.nav-btn { text-decoration: none; }
     position: relative;
 }
 .script-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.script-card.script-private { border-left: 3px solid rgba(139,92,246,.5); }
 
 .script-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .script-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); flex: 1; }
