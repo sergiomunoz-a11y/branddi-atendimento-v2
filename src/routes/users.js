@@ -18,21 +18,30 @@ const VALID_ROLES = ['SDR', 'Closer', 'Admin'];
 router.get('/users', ...adminOnly, async (req, res) => {
     let { data, error } = await supabase
         .from('platform_users')
-        .select('id, email, name, role, pipedrive_user_id, avatar_url, active, permissions, created_at')
+        .select('id, email, name, role, pipedrive_user_id, pipedrive_api_token, avatar_url, active, permissions, created_at')
         .order('created_at', { ascending: true });
 
-    // Fallback if permissions column doesn't exist yet
+    // Fallback if columns don't exist yet
     if (error?.code === '42703') {
         const retry = await supabase
             .from('platform_users')
             .select('id, email, name, role, pipedrive_user_id, avatar_url, active, created_at')
             .order('created_at', { ascending: true });
-        data = (retry.data || []).map(u => ({ ...u, permissions: {} }));
+        data = (retry.data || []).map(u => ({ ...u, permissions: {}, pipedrive_api_token: null }));
         error = retry.error;
     }
 
     if (error) return res.status(500).json({ error: error.message });
-    res.json({ users: data });
+
+    // Mascarar tokens — mostra só os últimos 6 chars para o admin saber se está preenchido
+    const masked = (data || []).map(u => ({
+        ...u,
+        pipedrive_api_token: u.pipedrive_api_token
+            ? `***${u.pipedrive_api_token.slice(-6)}`
+            : null,
+    }));
+
+    res.json({ users: masked });
 });
 
 // ─── POST /api/users — cria novo usuário ─────────────────────────────
@@ -45,17 +54,21 @@ router.post('/users', ...adminOnly, async (req, res) => {
     });
     if (err) return res.status(400).json({ error: err });
 
-    const { email, password, name, role, pipedrive_user_id, permissions } = req.body;
+    const { email, password, name, role, pipedrive_user_id, permissions, pipedrive_api_token } = req.body;
 
     const password_hash = await hashPassword(password);
-    const { data, error } = await supabase.from('platform_users').insert({
+    const insert = {
         email: email.toLowerCase().trim(),
         password_hash,
         name,
         role,
         pipedrive_user_id: pipedrive_user_id || null,
         permissions: permissions || {},
-    }).select('id, email, name, role, pipedrive_user_id, permissions, active').single();
+    };
+    if (pipedrive_api_token) insert.pipedrive_api_token = pipedrive_api_token;
+
+    const { data, error } = await supabase.from('platform_users').insert(insert)
+        .select('id, email, name, role, pipedrive_user_id, permissions, active').single();
 
     if (error) {
         if (error.code === '23505') return res.status(409).json({ error: 'Este e-mail já está cadastrado.' });
@@ -66,7 +79,7 @@ router.post('/users', ...adminOnly, async (req, res) => {
 
 // ─── PATCH /api/users/:id — edita usuário ────────────────────────────
 router.patch('/users/:id', ...adminOnly, async (req, res) => {
-    const { name, role, pipedrive_user_id, active, password, permissions } = req.body;
+    const { name, role, pipedrive_user_id, active, password, permissions, pipedrive_api_token } = req.body;
 
     // Validação condicional dos campos fornecidos
     const rules = {};
@@ -85,6 +98,7 @@ router.patch('/users/:id', ...adminOnly, async (req, res) => {
     if (pipedrive_user_id !== undefined) updates.pipedrive_user_id = pipedrive_user_id;
     if (active !== undefined)            updates.active            = active;
     if (permissions !== undefined)       updates.permissions       = permissions;
+    if (pipedrive_api_token !== undefined) updates.pipedrive_api_token = pipedrive_api_token || null;
     if (password)                        updates.password_hash     = await hashPassword(password);
     updates.updated_at = new Date().toISOString();
 

@@ -12,10 +12,24 @@ import {
     createLead, findLeadByPhone, createConversation, updateLead,
     updateConversation, getMessages, normalizePhone
 } from '../services/supabase.js';
+import supabase from '../services/supabase.js';
 import { startNewChat } from '../services/unipile.js';
 import logger from '../services/logger.js';
 
 const router = Router();
+
+// Helper: resolve token Pipedrive individual do user
+async function getUserPdToken(userId) {
+    if (!userId) return null;
+    try {
+        const { data } = await supabase
+            .from('platform_users')
+            .select('pipedrive_api_token')
+            .eq('id', userId)
+            .single();
+        return data?.pipedrive_api_token || null;
+    } catch { return null; }
+}
 
 // ─── GET /api/pipedrive/search-deals — Busca deals por termo ─────────
 router.get('/pipedrive/search-deals', async (req, res) => {
@@ -231,8 +245,9 @@ router.post('/pipedrive/sync-reply', async (req, res) => {
         }
 
         const now = new Date();
+        const userToken = await getUserPdToken(req.user?.id);
 
-        // Cria atividade "Respondeu"
+        // Cria atividade "Respondeu" com token individual (se disponível)
         await pdPost('/activities', {
             subject: `Lead respondeu via WhatsApp`,
             type: 'whatsapp',
@@ -243,7 +258,7 @@ router.post('/pipedrive/sync-reply', async (req, res) => {
             done: 1,
             note: transcript || 'Lead respondeu via WhatsApp — ver conversa no Branddi Atendimento.',
             user_id: req.user?.pipedrive_user_id || undefined,
-        });
+        }, userToken);
 
         // Atualiza "Último ponto de contato"
         await pdPut(`/deals/${deal_id}`, {

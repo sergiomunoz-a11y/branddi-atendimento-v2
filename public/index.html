@@ -547,24 +547,24 @@
         <div class="settings-tab-panel active" id="stab-general">
             <div class="modal-body" style="padding:24px;max-height:70vh;overflow-y:auto">
 
-                <!-- Perfil -->
+                <!-- Perfil Pessoal (TODOS os users veem) -->
                 <div class="settings-section">
-                    <h4 class="settings-section-title">👤 Perfil do Atendente</h4>
+                    <h4 class="settings-section-title">👤 Meu Perfil</h4>
                     <div class="settings-row">
                         <div class="settings-photo-upload" id="settings-photo-preview" onclick="document.getElementById('settings-photo-input').click()" title="Clique para alterar">
                             <span id="settings-photo-icon">👤</span>
                         </div>
                         <input type="file" id="settings-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this)" />
                         <div class="settings-field-group">
-                            <label>Nome do atendente</label>
-                            <input type="text" id="settings-agent-name" class="settings-input" placeholder="Ex: Time Branddi" />
-                            <span style="font-size:11px;color:var(--text-muted)">Aparece como remetente nas mensagens</span>
+                            <label>Meu nome</label>
+                            <input type="text" id="settings-my-name" class="settings-input" placeholder="Seu nome" />
+                            <span style="font-size:11px;color:var(--text-muted)">Aparece como remetente nas mensagens enviadas por voce</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Bot 24h -->
-                <div class="settings-section">
+                <!-- Bot 24h (SÓ Admin) -->
+                <div class="settings-section admin-section" id="section-bot">
                     <h4 class="settings-section-title">🤖 Bot 24h — Resposta de Ausencia</h4>
                     <div class="form-group">
                         <label style="display:flex;align-items:center;gap:10px">
@@ -584,8 +584,18 @@
                     </div>
                 </div>
 
-                <!-- Pipedrive -->
-                <div class="settings-section">
+                <!-- Nome do atendente global (SÓ Admin) -->
+                <div class="settings-section admin-section" id="section-agent">
+                    <h4 class="settings-section-title">📛 Nome Global do Atendente</h4>
+                    <div class="form-group">
+                        <label>Nome que aparece no bot automatico</label>
+                        <input type="text" id="settings-agent-name" class="settings-input" placeholder="Ex: Time Branddi" />
+                        <span style="font-size:11px;color:var(--text-muted)">Usado pelo bot automatico. Cada usuario tem seu proprio nome no perfil acima.</span>
+                    </div>
+                </div>
+
+                <!-- Pipedrive (SÓ Admin) -->
+                <div class="settings-section admin-section" id="section-pipedrive">
                     <h4 class="settings-section-title">🔗 Pipedrive — Envio de Leads</h4>
                     <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Configuracoes usadas ao enviar um lead manualmente ao Pipedrive.</p>
                     <div class="settings-row">
@@ -613,7 +623,7 @@
 
             <div class="modal-footer" style="padding:16px 24px">
                 <button class="btn-secondary" onclick="closeSettingsModal()">Cancelar</button>
-                <button class="btn-primary" onclick="saveSettings()">💾 Salvar Configuracoes</button>
+                <button class="btn-primary" onclick="saveSettings()">💾 Salvar</button>
             </div>
         </div>
 
@@ -657,6 +667,14 @@
                                 <option value="">— Nao vincular —</option>
                             </select>
                             <span style="font-size:11px;color:var(--text-muted)">O deal criado por este usuario sera atribuido a esta pessoa no Pipedrive</span>
+                        </div>
+                        <div class="form-group" style="grid-column:1/-1">
+                            <label>API Token pessoal do Pipedrive</label>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <input type="password" id="uf-pipedrive-token" class="settings-input" placeholder="Cole o token aqui (Pipedrive > Config > Preferencias > API)" style="flex:1" />
+                                <button type="button" class="btn-sm btn-outline" style="padding:5px 10px;font-size:11px;white-space:nowrap" onclick="toggleTokenVisibility()">👁️</button>
+                            </div>
+                            <span id="uf-token-status" style="font-size:11px;color:var(--text-muted)">Necessario para que atividades apareçam como criadas por este usuario no Pipedrive</span>
                         </div>
                         <div class="form-group" style="grid-column:1/-1">
                             <label>Tipos de conversa permitidos</label>

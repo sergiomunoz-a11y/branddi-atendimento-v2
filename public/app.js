@@ -1846,67 +1846,82 @@ async function openSettingsModal() {
     const modal = document.getElementById('modal-settings');
     if (modal) modal.style.display = 'flex';
 
+    const isAdmin = currentUser?.role === 'Admin';
+
+    // Mostra/esconde aba de usuários (Admin only)
     const tabUsers = document.querySelector('[data-stab="users"]');
-    if (tabUsers) {
-        tabUsers.style.display = currentUser?.role === 'Admin' ? '' : 'none';
-    }
+    if (tabUsers) tabUsers.style.display = isAdmin ? '' : 'none';
+
+    // Mostra/esconde seções admin (bot, pipedrive, agent name)
+    document.querySelectorAll('.admin-section').forEach(el => {
+        el.style.display = isAdmin ? '' : 'none';
+    });
 
     try {
-        const [settRes, pdRes] = await Promise.all([
-            apiFetch('/api/settings'),
-            apiFetch('/api/settings/pipedrive-data'),
-        ]);
-        _settingsData = settRes.settings;
-        const { pipelines = [], stages = [], users = [] } = pdRes;
+        // Carrega perfil pessoal do user logado
+        const profileRes = await apiFetch('/api/settings/my-profile');
+        const profile = profileRes.profile || {};
+        const myNameEl = document.getElementById('settings-my-name');
+        if (myNameEl) myNameEl.value = profile.name || '';
 
-        // Preenche perfil
-        const agentNameEl = document.getElementById('settings-agent-name');
-        if (agentNameEl) agentNameEl.value = _settingsData.agent_name || '';
-
-        // Foto
+        // Foto do user
         const preview = document.getElementById('settings-photo-preview');
         if (preview) {
-            if (_settingsData.agent_photo) {
-                preview.innerHTML = `<img src="${_settingsData.agent_photo}" alt="foto" />`;
+            if (profile.avatar_url) {
+                preview.innerHTML = `<img src="${profile.avatar_url}" alt="foto" />`;
             } else {
                 preview.innerHTML = `<span id="settings-photo-icon">👤</span>`;
             }
         }
 
-        // Bot 24h
-        const awayEnabledEl = document.getElementById('settings-away-enabled');
-        if (awayEnabledEl) awayEnabledEl.checked = !!_settingsData.away_enabled;
-        const awayMinEl = document.getElementById('settings-away-minutes');
-        if (awayMinEl) awayMinEl.value = _settingsData.away_minutes ?? 10;
-        const awayMsgEl = document.getElementById('settings-away-message');
-        if (awayMsgEl) awayMsgEl.value = _settingsData.away_message || '';
+        // Se Admin, carrega configs globais + dados Pipedrive
+        if (isAdmin) {
+            const [settRes, pdRes] = await Promise.all([
+                apiFetch('/api/settings'),
+                apiFetch('/api/settings/pipedrive-data'),
+            ]);
+            _settingsData = settRes.settings;
+            const { pipelines = [], stages = [], users = [] } = pdRes;
 
-        // Funis
-        const pipelineSel = document.getElementById('settings-pipeline');
-        if (pipelineSel) {
-            pipelineSel.innerHTML = pipelines.map(p =>
-                `<option value="${p.id}" ${p.id == _settingsData.pipedrive_pipeline_id ? 'selected' : ''}>${p.name}</option>`
-            ).join('');
-        }
+            // Agent name global (do bot)
+            const agentNameEl = document.getElementById('settings-agent-name');
+            if (agentNameEl) agentNameEl.value = _settingsData.agent_name || '';
 
-        // Etapas
-        const stageSel = document.getElementById('settings-stage');
-        if (stageSel) {
-            stageSel.innerHTML = stages.map(s =>
-                `<option value="${s.id}" ${s.id == _settingsData.pipedrive_stage_id ? 'selected' : ''}>${s.name}</option>`
-            ).join('') || '<option value="">Nenhuma etapa encontrada</option>';
-        }
+            // Bot 24h
+            const awayEnabledEl = document.getElementById('settings-away-enabled');
+            if (awayEnabledEl) awayEnabledEl.checked = !!_settingsData.away_enabled;
+            const awayMinEl = document.getElementById('settings-away-minutes');
+            if (awayMinEl) awayMinEl.value = _settingsData.away_minutes ?? 10;
+            const awayMsgEl = document.getElementById('settings-away-message');
+            if (awayMsgEl) awayMsgEl.value = _settingsData.away_message || '';
 
-        // Proprietarios
-        const ownerSel = document.getElementById('settings-owner');
-        if (ownerSel) {
-            ownerSel.innerHTML = `<option value="">— Nao atribuido —</option>` +
-                users.map(u =>
-                    `<option value="${u.id}" ${u.id == _settingsData.pipedrive_owner_id ? 'selected' : ''}>${u.name}</option>`
+            // Funis
+            const pipelineSel = document.getElementById('settings-pipeline');
+            if (pipelineSel) {
+                pipelineSel.innerHTML = pipelines.map(p =>
+                    `<option value="${p.id}" ${p.id == _settingsData.pipedrive_pipeline_id ? 'selected' : ''}>${p.name}</option>`
                 ).join('');
-        }
+            }
 
-        window._pdUsers = users;
+            // Etapas
+            const stageSel = document.getElementById('settings-stage');
+            if (stageSel) {
+                stageSel.innerHTML = stages.map(s =>
+                    `<option value="${s.id}" ${s.id == _settingsData.pipedrive_stage_id ? 'selected' : ''}>${s.name}</option>`
+                ).join('') || '<option value="">Nenhuma etapa encontrada</option>';
+            }
+
+            // Proprietarios
+            const ownerSel = document.getElementById('settings-owner');
+            if (ownerSel) {
+                ownerSel.innerHTML = `<option value="">— Nao atribuido —</option>` +
+                    users.map(u =>
+                        `<option value="${u.id}" ${u.id == _settingsData.pipedrive_owner_id ? 'selected' : ''}>${u.name}</option>`
+                    ).join('');
+            }
+
+            window._pdUsers = users;
+        }
 
     } catch (err) {
         toast(`Erro ao carregar configuracoes: ${err.message}`, 'error');
@@ -1991,6 +2006,10 @@ function openAddUserForm() {
     if (pwEl) pwEl.value = '';
     const roleEl = document.getElementById('uf-role');
     if (roleEl) roleEl.value = 'SDR';
+    const tokenEl = document.getElementById('uf-pipedrive-token');
+    if (tokenEl) { tokenEl.value = ''; tokenEl.placeholder = 'Cole o token aqui (Pipedrive > Config > Preferencias > API)'; }
+    const tokenStatus = document.getElementById('uf-token-status');
+    if (tokenStatus) { tokenStatus.textContent = 'Necessario para que atividades aparecam como criadas por este usuario no Pipedrive'; tokenStatus.style.color = 'var(--text-muted)'; }
     populatePdUsersDropdown(null);
     populatePermissions({});
     const wrap = document.getElementById('user-form-wrap');
@@ -2010,6 +2029,21 @@ function openEditUserForm(user) {
     if (pwEl) pwEl.value = '';
     const roleEl = document.getElementById('uf-role');
     if (roleEl) roleEl.value = user.role;
+    // Pipedrive token
+    const tokenEl = document.getElementById('uf-pipedrive-token');
+    if (tokenEl) {
+        tokenEl.value = '';
+        tokenEl.placeholder = user.pipedrive_api_token
+            ? `Token salvo (${user.pipedrive_api_token})`
+            : 'Cole o token aqui (Pipedrive > Config > Preferencias > API)';
+    }
+    const tokenStatus = document.getElementById('uf-token-status');
+    if (tokenStatus) {
+        tokenStatus.textContent = user.pipedrive_api_token
+            ? `✅ Token configurado (${user.pipedrive_api_token}). Deixe vazio para manter.`
+            : 'Necessario para que atividades aparecam como criadas por este usuario no Pipedrive';
+        tokenStatus.style.color = user.pipedrive_api_token ? 'var(--accent)' : 'var(--text-muted)';
+    }
     populatePdUsersDropdown(user.pipedrive_user_id);
     populatePermissions(user.permissions || {});
     const wrap = document.getElementById('user-form-wrap');
@@ -2073,6 +2107,12 @@ function closeAddUserForm() {
     if (wrap) wrap.style.display = 'none';
 }
 
+function toggleTokenVisibility() {
+    const el = document.getElementById('uf-pipedrive-token');
+    if (!el) return;
+    el.type = el.type === 'password' ? 'text' : 'password';
+}
+
 async function saveUser() {
     const id       = document.getElementById('uf-id')?.value;
     const name     = document.getElementById('uf-name')?.value.trim();
@@ -2080,6 +2120,7 @@ async function saveUser() {
     const password = document.getElementById('uf-password')?.value;
     const role     = document.getElementById('uf-role')?.value;
     const pdUserId = document.getElementById('uf-pipedrive-user')?.value;
+    const pdToken  = document.getElementById('uf-pipedrive-token')?.value.trim();
     const permissions = getPermissionsFromForm();
 
     if (!name || !email) { toast('Nome e e-mail sao obrigatorios', 'error'); return; }
@@ -2088,6 +2129,7 @@ async function saveUser() {
     try {
         const body = { name, email, role, pipedrive_user_id: pdUserId || null, permissions };
         if (password) body.password = password;
+        if (pdToken) body.pipedrive_api_token = pdToken; // só envia se preenchido (não sobrescreve com vazio)
 
         if (id) {
             await apiFetch(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -2156,33 +2198,54 @@ function handlePhotoUpload(input) {
 }
 
 async function saveSettings() {
-    const pipelineSel  = document.getElementById('settings-pipeline');
-    const stageSel     = document.getElementById('settings-stage');
-    const ownerSel     = document.getElementById('settings-owner');
-    const preview      = document.getElementById('settings-photo-preview');
-
-    if (!pipelineSel || !stageSel || !ownerSel) return;
-
-    const ownerOpt     = ownerSel.options[ownerSel.selectedIndex];
-    const pipelineOpt  = pipelineSel.options[pipelineSel.selectedIndex];
-    const stageOpt     = stageSel.options[stageSel.selectedIndex];
-
-    const payload = {
-        agent_name:  document.getElementById('settings-agent-name')?.value.trim() || '',
-        agent_photo: preview?.dataset.photo || _settingsData?.agent_photo || '',
-        away_enabled: document.getElementById('settings-away-enabled')?.checked || false,
-        away_minutes: parseInt(document.getElementById('settings-away-minutes')?.value) || 10,
-        away_message: document.getElementById('settings-away-message')?.value.trim() || '',
-        pipedrive_pipeline_id:   parseInt(pipelineSel.value) || null,
-        pipedrive_pipeline_name: pipelineOpt?.text || '',
-        pipedrive_stage_id:      parseInt(stageSel.value) || null,
-        pipedrive_stage_name:    stageOpt?.text || '',
-        pipedrive_owner_id:      ownerSel.value ? parseInt(ownerSel.value) : null,
-        pipedrive_owner_name:    ownerOpt?.text || 'Nao atribuido',
-    };
+    const isAdmin = currentUser?.role === 'Admin';
+    const preview = document.getElementById('settings-photo-preview');
 
     try {
-        await apiFetch('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
+        // 1. Salva perfil pessoal (todos os users)
+        const myName = document.getElementById('settings-my-name')?.value.trim();
+        const profilePayload = { name: myName || '' };
+        if (preview?.dataset.photo) profilePayload.avatar_url = preview.dataset.photo;
+
+        await apiFetch('/api/settings/my-profile', {
+            method: 'PATCH',
+            body: JSON.stringify(profilePayload),
+        });
+
+        // Atualiza nome no header/localStorage
+        if (myName && currentUser) {
+            currentUser.name = myName;
+            localStorage.setItem('ba_user', JSON.stringify(currentUser));
+        }
+
+        // 2. Se Admin, salva configs globais (bot, pipedrive)
+        if (isAdmin) {
+            const pipelineSel = document.getElementById('settings-pipeline');
+            const stageSel    = document.getElementById('settings-stage');
+            const ownerSel    = document.getElementById('settings-owner');
+
+            if (pipelineSel && stageSel && ownerSel) {
+                const ownerOpt    = ownerSel.options[ownerSel.selectedIndex];
+                const pipelineOpt = pipelineSel.options[pipelineSel.selectedIndex];
+                const stageOpt    = stageSel.options[stageSel.selectedIndex];
+
+                const payload = {
+                    agent_name:  document.getElementById('settings-agent-name')?.value.trim() || '',
+                    agent_photo: preview?.dataset.photo || _settingsData?.agent_photo || '',
+                    away_enabled: document.getElementById('settings-away-enabled')?.checked || false,
+                    away_minutes: parseInt(document.getElementById('settings-away-minutes')?.value) || 10,
+                    away_message: document.getElementById('settings-away-message')?.value.trim() || '',
+                    pipedrive_pipeline_id:   parseInt(pipelineSel.value) || null,
+                    pipedrive_pipeline_name: pipelineOpt?.text || '',
+                    pipedrive_stage_id:      parseInt(stageSel.value) || null,
+                    pipedrive_stage_name:    stageOpt?.text || '',
+                    pipedrive_owner_id:      ownerSel.value ? parseInt(ownerSel.value) : null,
+                    pipedrive_owner_name:    ownerOpt?.text || 'Nao atribuido',
+                };
+                await apiFetch('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
+            }
+        }
+
         toast('Configuracoes salvas!', 'success');
         closeSettingsModal();
     } catch (err) {
@@ -2583,11 +2646,12 @@ window.loadSettingsStages  = loadSettingsStages;
 window.handlePhotoUpload   = handlePhotoUpload;
 
 // Users
-window.openAddUserForm   = openAddUserForm;
-window.closeAddUserForm  = closeAddUserForm;
-window.saveUser          = saveUser;
-window.openEditUserForm  = openEditUserForm;
-window.toggleUserActive  = toggleUserActive;
+window.openAddUserForm       = openAddUserForm;
+window.closeAddUserForm      = closeAddUserForm;
+window.saveUser              = saveUser;
+window.openEditUserForm      = openEditUserForm;
+window.toggleUserActive      = toggleUserActive;
+window.toggleTokenVisibility = toggleTokenVisibility;
 
 // WhatsApp
 window.openWaConnect      = openWaConnect;

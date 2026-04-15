@@ -10,14 +10,17 @@ const TOKEN = process.env.PIPEDRIVE_API_TOKEN;
 
 // ─── Core Wrappers ────────────────────────────────────────────────────
 
-export async function pdGet(endpoint) {
+// tokenOverride: permite usar token individual do user em vez do global
+export async function pdGet(endpoint, tokenOverride) {
+    const token = tokenOverride || TOKEN;
     const sep = endpoint.includes('?') ? '&' : '?';
-    const res = await fetch(`${BASE}${endpoint}${sep}api_token=${TOKEN}`);
+    const res = await fetch(`${BASE}${endpoint}${sep}api_token=${token}`);
     return res.json();
 }
 
-export async function pdPost(endpoint, data) {
-    const res = await fetch(`${BASE}${endpoint}?api_token=${TOKEN}`, {
+export async function pdPost(endpoint, data, tokenOverride) {
+    const token = tokenOverride || TOKEN;
+    const res = await fetch(`${BASE}${endpoint}?api_token=${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -25,8 +28,9 @@ export async function pdPost(endpoint, data) {
     return res.json();
 }
 
-export async function pdPut(endpoint, data) {
-    const res = await fetch(`${BASE}${endpoint}?api_token=${TOKEN}`, {
+export async function pdPut(endpoint, data, tokenOverride) {
+    const token = tokenOverride || TOKEN;
+    const res = await fetch(`${BASE}${endpoint}?api_token=${token}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

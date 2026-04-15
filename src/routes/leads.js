@@ -12,8 +12,24 @@ import {
     findPersonWithDeals, pdGet, getPersonLabelOptions, updatePersonLabels
 } from '../services/pipedrive.js';
 import { validate } from '../middleware/validate.js';
+import supabase from '../services/supabase.js';
 
 const router = Router();
+
+// Helper: resolve o token Pipedrive do user logado (individual ou fallback global)
+async function getUserPipedriveToken(userId) {
+    if (!userId) return process.env.PIPEDRIVE_API_TOKEN;
+    try {
+        const { data } = await supabase
+            .from('platform_users')
+            .select('pipedrive_api_token')
+            .eq('id', userId)
+            .single();
+        return data?.pipedrive_api_token || process.env.PIPEDRIVE_API_TOKEN;
+    } catch {
+        return process.env.PIPEDRIVE_API_TOKEN;
+    }
+}
 
 // ─── GET /api/leads — Lista leads com filtros ─────────────────────────
 router.get('/leads', async (req, res) => {
@@ -355,12 +371,13 @@ router.post('/leads/:id/activities/whatsapp', async (req, res) => {
             })
             .join('\n');
 
+        const apiToken = await getUserPipedriveToken(req.user?.id);
         const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
         const now  = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toTimeString().slice(0, 5);
 
-        await fetch(`${base}/activities?api_token=${process.env.PIPEDRIVE_API_TOKEN}`, {
+        await fetch(`${base}/activities?api_token=${apiToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -403,11 +420,12 @@ router.post('/leads/:id/activities/reply', async (req, res) => {
                 .join('\n');
         }
 
+        const apiToken = await getUserPipedriveToken(req.user?.id);
         const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
         const now  = new Date();
         const dateStr = now.toISOString().split('T')[0];
 
-        await fetch(`${base}/activities?api_token=${process.env.PIPEDRIVE_API_TOKEN}`, {
+        await fetch(`${base}/activities?api_token=${apiToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

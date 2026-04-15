@@ -5,7 +5,9 @@
  */
 import { Router } from 'express';
 import { getSettings, saveSetting } from '../services/supabase.js';
+import supabase from '../services/supabase.js';
 import { pdGet } from '../services/pipedrive.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -26,7 +28,43 @@ const DEFAULTS = {
     pipedrive_owner_name:    'Não atribuído',
 };
 
-// ─── GET /api/settings ────────────────────────────────────────────────
+// ─── GET /api/settings/my-profile — Perfil pessoal do user logado ─────
+router.get('/settings/my-profile', requireAuth, async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('platform_users')
+            .select('id, email, name, role, avatar_url, pipedrive_user_id')
+            .eq('id', req.user.id)
+            .single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.json({ profile: data });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── PATCH /api/settings/my-profile — Atualiza perfil pessoal ────────
+router.patch('/settings/my-profile', requireAuth, async (req, res) => {
+    try {
+        const { name, avatar_url } = req.body;
+        const updates = { updated_at: new Date().toISOString() };
+        if (name !== undefined) updates.name = name;
+        if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+
+        const { data, error } = await supabase
+            .from('platform_users')
+            .update(updates)
+            .eq('id', req.user.id)
+            .select('id, email, name, role, avatar_url')
+            .single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.json({ profile: data });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/settings — Configurações globais (Admin/SDR autorizado) ─
 router.get('/settings', async (req, res) => {
     try {
         const dbSettings = await getSettings();
@@ -40,8 +78,8 @@ router.get('/settings', async (req, res) => {
     }
 });
 
-// ─── POST /api/settings ───────────────────────────────────────────────
-router.post('/settings', async (req, res) => {
+// ─── POST /api/settings — Só Admin pode alterar configs globais ───────
+router.post('/settings', requireAuth, requireRole('Admin'), async (req, res) => {
     try {
         const allowed = [
             'agent_name', 'agent_photo',
