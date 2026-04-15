@@ -145,6 +145,12 @@ function setupEventDelegation() {
             case 'save-note':
                 saveInternalNote();
                 break;
+            case 'open-deal-contacts':
+                openDealContacts(el.dataset.dealId);
+                break;
+            case 'close-deal-contacts':
+                closeDealContactsModal();
+                break;
         }
     });
 }
@@ -214,6 +220,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { setupEventDelegation(); } catch (e) { console.warn('setupEventDelegation:', e); }
     try { setupMobile(); } catch (e) { console.warn('setupMobile:', e); }
 
+    // Deals tab events
+    document.getElementById('btn-send-outbound')?.addEventListener('click', sendOutbound);
+    document.getElementById('btn-import-history')?.addEventListener('click', importWhatsAppHistory);
+    document.getElementById('deals-search')?.addEventListener('input', debounce(renderDealsGrid, 300));
+
     // Fix autofill: browser ignora autocomplete=off, limpamos via JS
     document.querySelectorAll('.sidebar-search, .search-input').forEach(el => { el.value = ''; });
 
@@ -274,6 +285,7 @@ function switchTab(tab) {
     if (tab === 'scripts') loadScripts();
     if (tab === 'leads') loadLeads();
     if (tab === 'history') setTimeout(loadHistory, 100);
+    if (tab === 'deals') loadDeals();
 }
 
 // --- INBOX ---
@@ -2323,6 +2335,185 @@ function setupHistoryFilters() {
 // ===================================================================
 //  WINDOW EXPORTS — all functions used in inline onclick handlers
 //  (necessary because script is type="module")
+// ===================================================================
+// ─── DEALS TAB (Pipedrive Integration) ─────────────────────────────
+// ===================================================================
+
+let _allDeals = [];
+let _selectedDealForOutbound = null;
+let _selectedContactForOutbound = null;
+
+async function loadDeals() {
+    const grid = document.getElementById('deals-grid');
+    if (!grid) return;
+    grid.textContent = 'Carregando deals do Pipedrive...';
+
+    try {
+        const data = await apiFetch('/api/pipedrive/my-deals');
+        _allDeals = data?.deals || [];
+        renderDealsGrid();
+    } catch (err) {
+        grid.textContent = 'Erro ao carregar deals: ' + err.message;
+    }
+}
+
+function renderDealsGrid() {
+    const grid = document.getElementById('deals-grid');
+    if (!grid) return;
+
+    const searchTerm = (document.getElementById('deals-search')?.value || '').toLowerCase();
+    let deals = _allDeals;
+    if (searchTerm) {
+        deals = deals.filter(d =>
+            (d.title || '').toLowerCase().includes(searchTerm) ||
+            (d.org_name || '').toLowerCase().includes(searchTerm) ||
+            (d.person_name || '').toLowerCase().includes(searchTerm)
+        );
+    }
+
+    if (deals.length === 0) {
+        grid.innerHTML = '<div class="empty-state-pro"><h4 class="empty-title">Nenhum deal encontrado</h4><p class="empty-desc">Verifique se seu usuario esta vinculado ao Pipedrive nas configuracoes.</p></div>';
+        return;
+    }
+
+    grid.innerHTML = deals.map(d => {
+        const phoneList = (d.person_phones || []).map(p => escHtml(p)).join(', ');
+        const hasPhone = d.has_phone;
+        return `
+        <div class="deal-card${hasPhone ? '' : ' no-phone'}" data-deal-id="${d.id}">
+            <div class="deal-card-header">
+                <div class="deal-card-org">${escHtml(d.org_name)}</div>
+                <div class="deal-card-value">${escHtml(d.value)}</div>
+            </div>
+            <div class="deal-card-title">${escHtml(d.title)}</div>
+            <div class="deal-card-meta">
+                <span class="deal-stage-badge">${escHtml(d.stage_name)}</span>
+            </div>
+            <div class="deal-card-person">
+                <span>${escHtml(d.person_name)}</span>
+                ${hasPhone ? `<span class="deal-phone">${phoneList}</span>` : '<span class="deal-no-phone">Sem telefone</span>'}
+            </div>
+            ${hasPhone ? `<button class="btn-sm btn-primary deal-start-btn" data-action="open-deal-contacts" data-deal-id="${d.id}">Iniciar WhatsApp</button>` : ''}
+        </div>`;
+    }).join('');
+}
+
+async function openDealContacts(dealId) {
+    const modal = document.getElementById('deal-contacts-modal');
+    const list = document.getElementById('deal-contacts-list');
+    const title = document.getElementById('deal-contacts-title');
+    const form = document.getElementById('deal-outbound-form');
+    if (!modal || !list) return;
+
+    modal.style.display = 'flex';
+    list.textContent = 'Carregando contatos...';
+    if (form) form.style.display = 'none';
+    _selectedContactForOutbound = null;
+    _selectedDealForOutbound = dealId;
+
+    try {
+        const data = await apiFetch(`/api/pipedrive/deal/${dealId}/contacts`);
+        const contacts = data?.contacts || [];
+        if (title && data?.deal) title.textContent = `Contatos — ${data.deal.title}`;
+
+        if (contacts.length === 0) {
+            list.textContent = 'Nenhum contato com telefone encontrado neste deal.';
+            return;
+        }
+
+        list.innerHTML = contacts.map(c => {
+            const phones = c.phones || [];
+            return phones.map(phone => `
+                <div class="deal-contact-item" data-person-id="${c.id}" data-phone="${escHtml(phone)}">
+                    <div class="deal-contact-info">
+                        <div class="deal-contact-name">${escHtml(c.name)}</div>
+                        ${c.job_title ? `<div class="deal-contact-role">${escHtml(c.job_title)} — ${escHtml(c.org_name || '')}</div>` : ''}
+                        <div class="deal-contact-phone">${escHtml(phone)}</div>
+                    </div>
+                    <button class="btn-sm btn-outline deal-select-contact" data-person-id="${c.id}" data-phone="${escHtml(phone)}" data-name="${escHtml(c.name)}">Selecionar</button>
+                </div>
+            `).join('');
+        }).join('');
+
+        // Event delegation
+        list.onclick = (e) => {
+            const btn = e.target.closest('.deal-select-contact');
+            if (!btn) return;
+            list.querySelectorAll('.deal-contact-item').forEach(el => el.classList.remove('selected'));
+            btn.closest('.deal-contact-item').classList.add('selected');
+            _selectedContactForOutbound = {
+                person_id: btn.dataset.personId,
+                phone: btn.dataset.phone,
+                name: btn.dataset.name,
+            };
+            if (form) form.style.display = '';
+        };
+    } catch (err) {
+        list.textContent = 'Erro: ' + err.message;
+    }
+}
+
+async function sendOutbound() {
+    if (!_selectedDealForOutbound || !_selectedContactForOutbound) {
+        toast('Selecione um contato primeiro', 'warning');
+        return;
+    }
+    const msgInput = document.getElementById('outbound-first-msg');
+    const text = (msgInput?.value || '').trim();
+    if (!text) { toast('Escreva a primeira mensagem', 'warning'); return; }
+
+    const btn = document.getElementById('btn-send-outbound');
+    if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+
+    try {
+        const res = await apiFetch('/api/pipedrive/start-outbound', {
+            method: 'POST',
+            body: JSON.stringify({
+                deal_id: _selectedDealForOutbound,
+                person_id: _selectedContactForOutbound.person_id,
+                phone: _selectedContactForOutbound.phone,
+                first_message: text,
+            }),
+        });
+
+        toast(`Conversa iniciada com ${_selectedContactForOutbound.name}!`, 'success');
+
+        // Fecha modal e vai para o inbox
+        closeDealContactsModal();
+        switchTab('inbox');
+        await loadInbox();
+
+        // Seleciona a conversa recem criada
+        if (res.conversation_id) {
+            selectConversation(res.conversation_id);
+        }
+    } catch (err) {
+        toast('Erro: ' + err.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Iniciar Conversa WhatsApp'; }
+    }
+}
+
+function closeDealContactsModal() {
+    const modal = document.getElementById('deal-contacts-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function importWhatsAppHistory() {
+    const btn = document.getElementById('btn-import-history');
+    if (btn) { btn.disabled = true; btn.textContent = 'Importando...'; }
+
+    try {
+        const res = await apiFetch('/api/conversations/import-history', { method: 'POST' });
+        toast(`Importado: ${res.imported} conversas (${res.skipped} ja existiam)`, 'success');
+        loadInbox();
+    } catch (err) {
+        toast('Erro: ' + err.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Importar Historico WhatsApp'; }
+    }
+}
+
 // ===================================================================
 
 // Auth

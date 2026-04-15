@@ -39,6 +39,10 @@
             <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-clock"></use></svg></span>
             <span class="nav-label">Histórico</span>
         </button>
+        <button class="nav-btn" data-tab="deals" id="tab-deals" title="Deals Pipedrive">
+            <span class="nav-icon"><svg class="icon"><use href="/icons.svg#icon-chart"></use></svg></span>
+            <span class="nav-label">Deals</span>
+        </button>
     </div>
     <div class="side-nav-bottom">
         <!-- Usuário logado (injetado via JS) -->
@@ -414,6 +418,39 @@
                 <tr class="skeleton-table-row"><td><div class="skeleton skeleton-table-cell" style="width:65%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:55%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:50%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:35%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:45%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:40%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:30%"></div></td><td><div class="skeleton skeleton-table-cell" style="width:25%"></div></td></tr>
             </tbody>
         </table>
+    </div>
+</section>
+
+<!-- ════════════ DEALS TAB ════════════ -->
+<section class="tab-panel" id="panel-deals">
+    <div class="panel-header">
+        <h2 class="panel-title">Deals Pipedrive</h2>
+        <div class="panel-actions">
+            <input type="search" class="search-input" id="deals-search" placeholder="Buscar deal por nome ou empresa..." autocomplete="off" />
+            <button class="btn-sm btn-primary" id="btn-import-history">Importar Historico WhatsApp</button>
+        </div>
+    </div>
+    <div class="deals-grid" id="deals-grid">
+        <div class="empty-state-pro">
+            <h4 class="empty-title">Carregando deals...</h4>
+        </div>
+    </div>
+
+    <!-- Modal: contatos do deal -->
+    <div class="modal-overlay" id="deal-contacts-modal" style="display:none">
+        <div class="modal-box" style="max-width:520px">
+            <div class="modal-header">
+                <h3 id="deal-contacts-title">Contatos do Deal</h3>
+                <button class="modal-close" data-action="close-deal-contacts">&times;</button>
+            </div>
+            <div class="modal-body" id="deal-contacts-list">
+                <span class="lp-muted">Carregando contatos...</span>
+            </div>
+            <div class="modal-footer" id="deal-outbound-form" style="display:none">
+                <textarea class="chat-textarea" id="outbound-first-msg" rows="3" placeholder="Primeira mensagem para o lead..."></textarea>
+                <button class="btn-sm btn-primary" id="btn-send-outbound" style="width:100%;margin-top:8px">Iniciar Conversa WhatsApp</button>
+            </div>
+        </div>
     </div>
 </section>
 
