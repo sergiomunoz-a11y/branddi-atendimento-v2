@@ -18,7 +18,7 @@ const VALID_ROLES = ['SDR', 'Closer', 'Admin'];
 router.get('/users', ...adminOnly, async (req, res) => {
     const { data, error } = await supabase
         .from('platform_users')
-        .select('id, email, name, role, pipedrive_user_id, avatar_url, active, created_at')
+        .select('id, email, name, role, pipedrive_user_id, avatar_url, active, permissions, created_at')
         .order('created_at', { ascending: true });
 
     if (error) return res.status(500).json({ error: error.message });
@@ -35,7 +35,7 @@ router.post('/users', ...adminOnly, async (req, res) => {
     });
     if (err) return res.status(400).json({ error: err });
 
-    const { email, password, name, role, pipedrive_user_id } = req.body;
+    const { email, password, name, role, pipedrive_user_id, permissions } = req.body;
 
     const password_hash = await hashPassword(password);
     const { data, error } = await supabase.from('platform_users').insert({
@@ -44,7 +44,8 @@ router.post('/users', ...adminOnly, async (req, res) => {
         name,
         role,
         pipedrive_user_id: pipedrive_user_id || null,
-    }).select('id, email, name, role, pipedrive_user_id, active').single();
+        permissions: permissions || {},
+    }).select('id, email, name, role, pipedrive_user_id, permissions, active').single();
 
     if (error) {
         if (error.code === '23505') return res.status(409).json({ error: 'Este e-mail já está cadastrado.' });
@@ -55,7 +56,7 @@ router.post('/users', ...adminOnly, async (req, res) => {
 
 // ─── PATCH /api/users/:id — edita usuário ────────────────────────────
 router.patch('/users/:id', ...adminOnly, async (req, res) => {
-    const { name, role, pipedrive_user_id, active, password } = req.body;
+    const { name, role, pipedrive_user_id, active, password, permissions } = req.body;
 
     // Validação condicional dos campos fornecidos
     const rules = {};
@@ -73,6 +74,7 @@ router.patch('/users/:id', ...adminOnly, async (req, res) => {
     if (role !== undefined)              updates.role              = role;
     if (pipedrive_user_id !== undefined) updates.pipedrive_user_id = pipedrive_user_id;
     if (active !== undefined)            updates.active            = active;
+    if (permissions !== undefined)       updates.permissions       = permissions;
     if (password)                        updates.password_hash     = await hashPassword(password);
     updates.updated_at = new Date().toISOString();
 
@@ -80,7 +82,7 @@ router.patch('/users/:id', ...adminOnly, async (req, res) => {
         .from('platform_users')
         .update(updates)
         .eq('id', req.params.id)
-        .select('id, email, name, role, pipedrive_user_id, active')
+        .select('id, email, name, role, pipedrive_user_id, permissions, active')
         .single();
 
     if (error) return res.status(500).json({ error: error.message });

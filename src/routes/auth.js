@@ -17,7 +17,7 @@ router.post('/auth/login', async (req, res) => {
 
     const { data: user, error } = await supabase
         .from('platform_users')
-        .select('id, email, name, role, password_hash, pipedrive_user_id, avatar_url, active')
+        .select('id, email, name, role, password_hash, pipedrive_user_id, avatar_url, active, permissions')
         .eq('email', email.toLowerCase().trim())
         .single();
 
@@ -33,6 +33,8 @@ router.post('/auth/login', async (req, res) => {
         return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
     }
 
+    const permissions = user.permissions || {};
+
     const token = signToken({
         id:                user.id,
         email:             user.email,
@@ -40,6 +42,7 @@ router.post('/auth/login', async (req, res) => {
         role:              user.role,
         pipedrive_user_id: user.pipedrive_user_id,
         avatar_url:        user.avatar_url,
+        permissions,
     });
 
     res.json({
@@ -51,6 +54,7 @@ router.post('/auth/login', async (req, res) => {
             role:              user.role,
             pipedrive_user_id: user.pipedrive_user_id,
             avatar_url:        user.avatar_url,
+            permissions,
         }
     });
 });

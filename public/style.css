@@ -1177,6 +1177,16 @@ a.nav-btn { text-decoration: none; }
     outline: none; border-color: var(--border-accent);
 }
 
+/* Permission checkboxes */
+.perm-checkboxes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.perm-check {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-secondary); cursor: pointer;
+}
+.perm-check input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;
+}
+
 /* ─── Toast ─────────────────────────────────────────────────── */
 .toast-container {
     position: fixed; bottom: 24px; right: 24px;

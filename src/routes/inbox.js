@@ -13,9 +13,10 @@ const router = Router();
 router.get('/inbox', async (req, res) => {
     try {
         const { status, type, limit = 50 } = req.query;
-        const user   = req.user || {};  // injetado pelo middleware requireAuth
+        const user   = req.user || {};
         const role   = user.role;
         const userId = user.id;
+        const permissions = user.permissions || {};
 
         const conversations = await getInbox({
             status,
@@ -23,6 +24,7 @@ router.get('/inbox', async (req, res) => {
             limit:   parseInt(limit),
             role,
             user_id: userId,
+            allowed_types: role === 'Admin' ? null : (permissions.conversation_types || []),
         });
         res.json({ conversations, total: conversations.length });
     } catch (err) {

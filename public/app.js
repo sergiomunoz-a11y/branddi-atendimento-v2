@@ -303,20 +303,41 @@ function setupInboxFilters() {
         });
     });
 
-    // Controle de visibilidade das abas por role
-    if (currentUser) {
+    // Controle de visibilidade das abas por permissions
+    if (currentUser && currentUser.role !== 'Admin') {
         const tabAll = document.getElementById('type-tab-all');
         const tabInbound = document.getElementById('type-tab-inbound');
         const tabProspecting = document.getElementById('type-tab-prospecting');
+        const perms = currentUser.permissions || {};
+        const allowedTypes = perms.conversation_types || [];
 
-        if (currentUser.role === 'SDR') {
-            if (tabAll) tabAll.style.display = 'none';
-            if (tabInbound) tabInbound.style.display = 'none';
-            if (tabProspecting) { tabProspecting.classList.add('active'); currentTypeFilter = 'prospecting'; }
-        } else if (currentUser.role === 'Closer') {
-            if (tabAll) tabAll.style.display = 'none';
-            if (tabProspecting) tabProspecting.style.display = 'none';
-            if (tabInbound) { tabInbound.classList.add('active'); currentTypeFilter = 'inbound'; }
+        // Se tem permissões definidas, usa elas; senão fallback para role
+        if (allowedTypes.length > 0) {
+            const hasInbound = allowedTypes.includes('inbound');
+            const hasProspecting = allowedTypes.includes('prospecting');
+
+            if (hasInbound && hasProspecting) {
+                // Ambos — mostra tudo normalmente
+            } else if (hasInbound) {
+                if (tabAll) tabAll.style.display = 'none';
+                if (tabProspecting) tabProspecting.style.display = 'none';
+                if (tabInbound) { tabInbound.classList.add('active'); currentTypeFilter = 'inbound'; }
+            } else if (hasProspecting) {
+                if (tabAll) tabAll.style.display = 'none';
+                if (tabInbound) tabInbound.style.display = 'none';
+                if (tabProspecting) { tabProspecting.classList.add('active'); currentTypeFilter = 'prospecting'; }
+            }
+        } else {
+            // Fallback legacy por role
+            if (currentUser.role === 'SDR') {
+                if (tabAll) tabAll.style.display = 'none';
+                if (tabInbound) tabInbound.style.display = 'none';
+                if (tabProspecting) { tabProspecting.classList.add('active'); currentTypeFilter = 'prospecting'; }
+            } else if (currentUser.role === 'Closer') {
+                if (tabAll) tabAll.style.display = 'none';
+                if (tabProspecting) tabProspecting.style.display = 'none';
+                if (tabInbound) { tabInbound.classList.add('active'); currentTypeFilter = 'inbound'; }
+            }
         }
     }
 }
@@ -540,13 +561,20 @@ function renderMessage(msg) {
     const isBot    = msg.sender_type === 'bot';
     const isOut    = msg.direction === 'outbound';
     const cls      = isBot ? 'bot' : (isOut ? 'outbound' : 'inbound');
-    const sender   = isBot ? '🤖 Bot' : (isOut ? '👤 Voce' : '');
     const time     = formatTime(msg.created_at);
+
+    // Nome do remetente: bot, nome do usuário que enviou, ou nada para lead
+    let sender = '';
+    if (isBot) {
+        sender = '🤖 Bot';
+    } else if (isOut) {
+        sender = msg.sent_by_name || msg.sender_name || 'Equipe';
+    }
 
     return `<div class="msg-bubble ${cls}">
         <div class="msg-text">${escHtml(msg.content || '(midia)')}</div>
         <div class="msg-meta">
-            ${sender ? `<span class="msg-sender${isBot ? ' bot-label' : ''}">${sender}</span>` : ''}
+            ${sender ? `<span class="msg-sender${isBot ? ' bot-label' : ''}">${escHtml(sender)}</span>` : ''}
             <span class="msg-time">${time}</span>
         </div>
     </div>`;
@@ -1940,6 +1968,7 @@ function openAddUserForm() {
     const roleEl = document.getElementById('uf-role');
     if (roleEl) roleEl.value = 'SDR';
     populatePdUsersDropdown(null);
+    populatePermissions({});
     const wrap = document.getElementById('user-form-wrap');
     if (wrap) wrap.style.display = '';
 }
@@ -1958,8 +1987,51 @@ function openEditUserForm(user) {
     const roleEl = document.getElementById('uf-role');
     if (roleEl) roleEl.value = user.role;
     populatePdUsersDropdown(user.pipedrive_user_id);
+    populatePermissions(user.permissions || {});
     const wrap = document.getElementById('user-form-wrap');
     if (wrap) wrap.style.display = '';
+}
+
+function populatePermissions(perms) {
+    // Conversation types
+    const inboundCb = document.getElementById('uf-perm-inbound');
+    const prospCb = document.getElementById('uf-perm-prospecting');
+    const types = perms.conversation_types || [];
+    if (inboundCb) inboundCb.checked = types.includes('inbound');
+    if (prospCb) prospCb.checked = types.includes('prospecting');
+
+    // WhatsApp accounts
+    const waContainer = document.getElementById('uf-wa-accounts');
+    if (!waContainer) return;
+    const allowedAccounts = perms.whatsapp_accounts || [];
+
+    apiFetch('/api/whatsapp/accounts').then(data => {
+        const accounts = data?.accounts || [];
+        if (accounts.length === 0) {
+            waContainer.textContent = 'Nenhuma conta WhatsApp conectada';
+            return;
+        }
+        waContainer.innerHTML = accounts.map(a => {
+            const checked = allowedAccounts.includes(a.id) ? 'checked' : '';
+            const label = a.connection_params?.im?.phone_number || a.name || a.id;
+            return `<label class="perm-check"><input type="checkbox" value="${a.id}" class="uf-wa-check" ${checked} /> ${escHtml(String(label))}</label>`;
+        }).join('');
+    }).catch(() => {
+        waContainer.textContent = 'Erro ao carregar contas';
+    });
+}
+
+function getPermissionsFromForm() {
+    const types = [];
+    if (document.getElementById('uf-perm-inbound')?.checked) types.push('inbound');
+    if (document.getElementById('uf-perm-prospecting')?.checked) types.push('prospecting');
+
+    const waAccounts = [];
+    document.querySelectorAll('.uf-wa-check:checked').forEach(cb => {
+        waAccounts.push(cb.value);
+    });
+
+    return { conversation_types: types, whatsapp_accounts: waAccounts };
 }
 
 function populatePdUsersDropdown(selectedId) {
@@ -1984,12 +2056,13 @@ async function saveUser() {
     const password = document.getElementById('uf-password')?.value;
     const role     = document.getElementById('uf-role')?.value;
     const pdUserId = document.getElementById('uf-pipedrive-user')?.value;
+    const permissions = getPermissionsFromForm();
 
     if (!name || !email) { toast('Nome e e-mail sao obrigatorios', 'error'); return; }
     if (!id && !password) { toast('Senha obrigatoria para novo usuario', 'error'); return; }
 
     try {
-        const body = { name, email, role, pipedrive_user_id: pdUserId || null };
+        const body = { name, email, role, pipedrive_user_id: pdUserId || null, permissions };
         if (password) body.password = password;
 
         if (id) {

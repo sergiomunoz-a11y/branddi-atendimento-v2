@@ -627,6 +627,21 @@
                             </select>
                             <span style="font-size:11px;color:var(--text-muted)">O deal criado por este usuario sera atribuido a esta pessoa no Pipedrive</span>
                         </div>
+                        <div class="form-group" style="grid-column:1/-1">
+                            <label>Tipos de conversa permitidos</label>
+                            <div class="perm-checkboxes" id="uf-conv-types">
+                                <label class="perm-check"><input type="checkbox" value="inbound" id="uf-perm-inbound" /> Site (Inbound)</label>
+                                <label class="perm-check"><input type="checkbox" value="prospecting" id="uf-perm-prospecting" /> Prospeccao</label>
+                            </div>
+                            <span style="font-size:11px;color:var(--text-muted)">Admin ve tudo. Para SDR/Closer, marque os tipos que pode acessar.</span>
+                        </div>
+                        <div class="form-group" style="grid-column:1/-1">
+                            <label>Contas WhatsApp autorizadas</label>
+                            <div class="perm-checkboxes" id="uf-wa-accounts">
+                                <span style="font-size:11px;color:var(--text-muted)">Carregando contas...</span>
+                            </div>
+                            <span style="font-size:11px;color:var(--text-muted)">Admin usa todas. Para SDR/Closer, marque as contas que pode usar para enviar.</span>
+                        </div>
                     </div>
                     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
                         <button class="btn-sm btn-outline" onclick="closeAddUserForm()">Cancelar</button>

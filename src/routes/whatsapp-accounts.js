@@ -56,9 +56,17 @@ router.get('/whatsapp/accounts', async (req, res) => {
         const all = data.items || (Array.isArray(data) ? data : []);
         console.log('[WA] Raw accounts:', JSON.stringify(all.slice(0,3)));
 
-        const accounts = all.filter(
+        let accounts = all.filter(
             a => (a.type || '').toUpperCase() === 'WHATSAPP' || (a.provider || '').toUpperCase() === 'WHATSAPP'
         );
+
+        // Filtra por permissão: non-Admin só vê contas autorizadas
+        const user = req.user || {};
+        const permissions = user.permissions || {};
+        if (user.role !== 'Admin' && Array.isArray(permissions.whatsapp_accounts) && permissions.whatsapp_accounts.length > 0) {
+            accounts = accounts.filter(a => permissions.whatsapp_accounts.includes(a.id));
+        }
+
         res.json({ accounts });
     } catch (err) {
         console.warn('[WA] Accounts error:', err.message);

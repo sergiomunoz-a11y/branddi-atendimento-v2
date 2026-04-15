@@ -122,14 +122,14 @@ export async function updateConversation(id, updates) {
  */
 export async function getInbox({
     status, assigned_to, limit = 50,
-    type, role, user_id,
+    type, role, user_id, allowed_types,
 } = {}) {
     let query = supabase
         .from('conversations')
         .select(`
             *,
             leads(id, name, phone, company_name, classification, origin),
-            messages(id, content, direction, sender_type, created_at, read_at)
+            messages(id, content, direction, sender_type, sender_name, sent_by_user_id, sent_by_name, created_at, read_at)
         `)
         .neq('status', 'closed')
         .order('updated_at', { ascending: false })
@@ -138,8 +138,11 @@ export async function getInbox({
 
     if (status) query = query.eq('status', status);
 
+    // Filtro por tipo: param explícito > permissões do usuário > role legacy
     if (type) {
         query = query.eq('type', type);
+    } else if (allowed_types && allowed_types.length > 0) {
+        query = query.in('type', allowed_types);
     } else if (role === 'SDR') {
         query = query.eq('type', 'prospecting');
     } else if (role === 'Closer') {

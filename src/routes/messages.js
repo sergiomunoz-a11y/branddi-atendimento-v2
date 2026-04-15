@@ -36,12 +36,14 @@ router.post('/messages/:conversationId/send', async (req, res) => {
         // Envia via Unipile
         await sendMessage(chatId, text);
 
-        // Salva no banco
+        // Salva no banco com rastreio do remetente
         const msg = await saveMessage({
             conversation_id:   req.params.conversationId,
             direction:         'outbound',
             sender_type:       'human',
-            sender_name:       'Atendente',
+            sender_name:       req.user?.name || 'Atendente',
+            sent_by_user_id:   req.user?.id || null,
+            sent_by_name:      req.user?.name || null,
             content:           text,
             attachments:       [],
             unipile_message_id: `human_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -79,12 +81,14 @@ router.post('/messages/:conversationId/script', async (req, res) => {
         // Envia via Unipile
         await sendMessage(chatId, text);
 
-        // Salva no banco
+        // Salva no banco com rastreio do remetente
         const msg = await saveMessage({
             conversation_id:   req.params.conversationId,
             direction:         'outbound',
             sender_type:       'human',
-            sender_name:       'Atendente',
+            sender_name:       req.user?.name || 'Atendente',
+            sent_by_user_id:   req.user?.id || null,
+            sent_by_name:      req.user?.name || null,
             content:           text,
             attachments:       [],
             unipile_message_id: `script_${Date.now()}_${Math.random().toString(36).slice(2)}`,
