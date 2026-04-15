@@ -8,6 +8,7 @@ import {
     findLeadByPhone, createLead, saveMessage, normalizePhone
 } from './supabase.js';
 import { processChatbotMessage } from './chatbot-engine.js';
+import { onInboundMessage } from './auto-activities.js';
 import whatsapp from '../providers/index.js';
 import logger from './logger.js';
 
@@ -193,6 +194,11 @@ async function processChat(chat) {
             // v2: Reset bot_away_sent quando nova msg inbound chega em conversa humana
             if (msg.direction === 'inbound' && conversation.chatbot_stage === 'human') {
                 await updateConversation(conversation.id, { bot_away_sent: false });
+            }
+
+            // Auto-create Reply activity in Pipedrive (fire and forget)
+            if (msg.direction === 'inbound') {
+                onInboundMessage(conversation.id).catch(() => {});
             }
 
             // Processa chatbot apenas para mensagens inbound

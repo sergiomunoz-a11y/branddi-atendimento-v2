@@ -1055,42 +1055,27 @@ function selectDeal(itemEl, lead, conv) {
 }
 
 function setupActivityButtons(conv, lead) {
-    const btnWA = document.getElementById('btn-act-whatsapp');
-    const btnReply = document.getElementById('btn-act-reply');
-
-    if (btnWA) btnWA.onclick = () => createWhatsAppActivity(conv, lead);
-    if (btnReply) btnReply.onclick = () => createReplyActivity(conv, lead);
+    const btnNote = document.getElementById('btn-act-note');
+    if (btnNote) btnNote.onclick = () => createDealNote(conv, lead);
 }
 
-async function createWhatsAppActivity(conv, lead) {
+async function createDealNote(conv, lead) {
     if (!selectedDealId) {
         toast('Selecione um deal primeiro', 'warning');
         return;
     }
+    const btn = document.getElementById('btn-act-note');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
     try {
-        await apiFetch(`/api/leads/${lead.id}/activities/whatsapp`, {
+        await apiFetch(`/api/leads/${lead.id}/notes`, {
             method: 'POST',
             body: JSON.stringify({ conversation_id: conv.id, deal_id: selectedDealId }),
         });
-        toast(`Atividade WhatsApp criada no Deal #${selectedDealId}!`, 'success');
+        toast(`Anotação com transcrição salva no Deal #${selectedDealId}!`, 'success');
     } catch (err) {
         toast(`Erro: ${err.message}`, 'error');
-    }
-}
-
-async function createReplyActivity(conv, lead) {
-    if (!selectedDealId) {
-        toast('Selecione um deal primeiro', 'warning');
-        return;
-    }
-    try {
-        await apiFetch(`/api/leads/${lead.id}/activities/reply`, {
-            method: 'POST',
-            body: JSON.stringify({ conversation_id: conv.id, deal_id: selectedDealId }),
-        });
-        toast(`Resposta registrada no Deal #${selectedDealId}!`, 'success');
-    } catch (err) {
-        toast(`Erro: ${err.message}`, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📝 Salvar transcrição como anotação'; }
     }
 }
 

@@ -130,21 +130,49 @@ export async function createDeal({ title, personId, orgId, pipelineId, stageId, 
     return res.data || null;
 }
 
-// ─── Activity (nota de conversa) ──────────────────────────────────────
+// ─── Activity ────────────────────────────────────────────────────────
 
-export async function createWhatsAppActivity({ dealId, personId, subject, transcript, done = true }) {
+export async function createWhatsAppActivity({ dealId, personId, subject, transcript, done = true, tokenOverride }) {
     const payload = {
         subject,
         type:      'whatsapp',
         done:      done ? 1 : 0,
         due_date:  new Date().toISOString().split('T')[0],
         due_time:  new Date().toTimeString().split(' ')[0].substring(0, 5),
-        note:      `<b>WhatsApp — ${subject}</b><br><br><pre>${transcript}</pre>`,
+        note:      `<b>WhatsApp — ${subject}</b><br><br><pre>${transcript || ''}</pre>`,
     };
     if (dealId)   payload.deal_id   = parseInt(dealId);
     if (personId) payload.person_id = parseInt(personId);
 
-    const res = await pdPost('/activities', payload);
+    const res = await pdPost('/activities', payload, tokenOverride);
+    return res.data || null;
+}
+
+export async function createReplyActivity({ dealId, personId, subject, content, tokenOverride }) {
+    const payload = {
+        subject,
+        type:      'resposta',
+        done:      1,
+        due_date:  new Date().toISOString().split('T')[0],
+        due_time:  new Date().toTimeString().split(' ')[0].substring(0, 5),
+        note:      content || '',
+    };
+    if (dealId)   payload.deal_id   = parseInt(dealId);
+    if (personId) payload.person_id = parseInt(personId);
+
+    const res = await pdPost('/activities', payload, tokenOverride);
+    return res.data || null;
+}
+
+// ─── Note (anotação no deal) ─────────────────────────────────────────
+
+export async function createDealNote({ dealId, content, pinned = false, tokenOverride }) {
+    const payload = {
+        content,
+        deal_id: parseInt(dealId),
+        pinned_to_deal_flag: pinned ? 1 : 0,
+    };
+    const res = await pdPost('/notes', payload, tokenOverride);
     return res.data || null;
 }
 

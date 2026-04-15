@@ -350,96 +350,45 @@ router.get('/leads/:id/deal', async (req, res) => {
     }
 });
 
-// ─── POST /api/leads/:id/activities/whatsapp — Cria atividade WhatsApp
+// ─── POST /api/leads/:id/notes — Cria anotação (Note) no Pipedrive com transcrição
 // Aceita deal_id explícito no body (deal picker) ou fallback para lead.crm_deal_id
-router.post('/leads/:id/activities/whatsapp', async (req, res) => {
+router.post('/leads/:id/notes', async (req, res) => {
     try {
         const { conversation_id, deal_id } = req.body;
         const lead = await getLeadById(req.params.id);
         const targetDealId = deal_id || lead?.crm_deal_id;
         if (!targetDealId) return res.status(400).json({ error: 'Nenhum deal selecionado' });
 
-        // Busca mensagens da conversa
-        const msgs = conversation_id ? await getMessages(conversation_id, { limit: 200 }) : [];
+        // Busca mensagens da conversa para transcrição
+        const msgs = conversation_id ? await getMessages(conversation_id, { limit: 500 }) : [];
         const transcript = msgs
             .map(m => {
                 const who = m.direction === 'outbound'
                     ? (m.sent_by_name || 'Equipe')
                     : (lead.name || 'Lead');
                 const time = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                return `[${time}] ${who}: ${m.content || '(mídia)'}`;
+                const date = new Date(m.created_at).toLocaleDateString('pt-BR');
+                return `[${date} ${time}] ${who}: ${m.content || '(mídia)'}`;
             })
             .join('\n');
 
         const apiToken = await getUserPipedriveToken(req.user?.id);
-        const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
-        const now  = new Date();
-        const dateStr = now.toISOString().split('T')[0];
-        const timeStr = now.toTimeString().slice(0, 5);
+        const dateStr = new Date().toLocaleDateString('pt-BR');
 
-        await fetch(`${base}/activities?api_token=${apiToken}`, {
+        // Cria Note no Pipedrive (não Activity)
+        const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
+        const noteRes = await fetch(`${base}/notes?api_token=${apiToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                subject:  `WhatsApp — ${lead.name || lead.phone} — ${dateStr}`,
-                type:     'call',
-                deal_id:   parseInt(targetDealId),
-                due_date:  dateStr,
-                due_time:  timeStr,
-                done:      1,
-                note:      transcript || 'Conversa WhatsApp registrada via Branddi Atendimento.',
-                user_id:   req.user?.pipedrive_user_id || undefined,
+                content: `<b>📱 Transcrição WhatsApp — ${lead.name || lead.phone} — ${dateStr}</b><br><br><pre>${transcript || '(sem mensagens)'}</pre><br><small>Gerado via Branddi Atendimento</small>`,
+                deal_id: parseInt(targetDealId),
+                pinned_to_deal_flag: 0,
             }),
         });
+        const noteData = await noteRes.json();
 
-        res.json({ ok: true, deal_id: targetDealId });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ─── POST /api/leads/:id/activities/reply — Cria atividade de Resposta
-// Aceita deal_id explícito no body (deal picker) ou fallback para lead.crm_deal_id
-router.post('/leads/:id/activities/reply', async (req, res) => {
-    try {
-        const { content, deal_id, conversation_id } = req.body;
-        const lead = await getLeadById(req.params.id);
-        const targetDealId = deal_id || lead?.crm_deal_id;
-        if (!targetDealId) return res.status(400).json({ error: 'Nenhum deal selecionado' });
-
-        // Se não vier content explícito, busca última mensagem inbound da conversa
-        let replyContent = content;
-        if (!replyContent && conversation_id) {
-            const msgs = await getMessages(conversation_id, { limit: 200 });
-            const inboundMsgs = msgs.filter(m => m.direction === 'inbound');
-            replyContent = inboundMsgs
-                .map(m => {
-                    const time = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                    return `[${time}] ${lead.name || 'Lead'}: ${m.content || '(mídia)'}`;
-                })
-                .join('\n');
-        }
-
-        const apiToken = await getUserPipedriveToken(req.user?.id);
-        const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
-        const now  = new Date();
-        const dateStr = now.toISOString().split('T')[0];
-
-        await fetch(`${base}/activities?api_token=${apiToken}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                subject:  `Resposta recebida — ${lead.name || lead.phone}`,
-                type:     'email',
-                deal_id:   parseInt(targetDealId),
-                due_date:  dateStr,
-                done:      1,
-                note:      replyContent || '(sem conteúdo)',
-                user_id:   req.user?.pipedrive_user_id || undefined,
-            }),
-        });
-
-        res.json({ ok: true, deal_id: targetDealId });
+        res.json({ ok: true, deal_id: targetDealId, note_id: noteData?.data?.id });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { getMessages, saveMessage, markMessagesRead, updateConversation, getLeadById } from '../services/supabase.js';
 import { sendMessage, startNewChat } from '../services/unipile.js';
 import { applyScriptVariables } from '../services/chatbot-engine.js';
+import { onOutboundMessage } from '../services/auto-activities.js';
 import supabase from '../services/supabase.js';
 
 const router = Router();
@@ -70,6 +71,8 @@ router.post('/messages/:conversationId/send', async (req, res) => {
                         chatbot_stage: 'human', status: 'in_progress',
                         last_message_at: new Date().toISOString(),
                     });
+                    // Auto-create WhatsApp activity in Pipedrive (fire and forget)
+                    onOutboundMessage(req.params.conversationId, req.user?.id).catch(() => {});
                     return res.json({ success: true, message: msg, chat_started: true });
                 }
             }
@@ -98,6 +101,9 @@ router.post('/messages/:conversationId/send', async (req, res) => {
             status: 'in_progress',
             last_message_at: new Date().toISOString(),
         });
+
+        // Auto-create WhatsApp activity in Pipedrive (fire and forget)
+        onOutboundMessage(req.params.conversationId, req.user?.id).catch(() => {});
 
         res.json({ success: true, message: msg });
     } catch (err) {
@@ -142,6 +148,9 @@ router.post('/messages/:conversationId/script', async (req, res) => {
             status: 'in_progress',
             last_message_at: new Date().toISOString(),
         });
+
+        // Auto-create WhatsApp activity in Pipedrive (fire and forget)
+        onOutboundMessage(req.params.conversationId, req.user?.id).catch(() => {});
 
         res.json({ success: true, message: msg, applied_text: text });
     } catch (err) {
