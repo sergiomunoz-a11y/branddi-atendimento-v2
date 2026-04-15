@@ -456,7 +456,6 @@ function renderConversationList() {
                 <span class="conv-name">${escHtml(name)}</span>
                 <span class="conv-time">${time}</span>
             </div>
-            ${lead.company_name ? `<div class="conv-company">${escHtml(lead.company_name)}</div>` : ''}
             <div class="conv-preview">${escHtml(preview)}</div>
             ${hasUnread ? `<div class="conv-tags"><span class="tag tag-unread">${conv.unread_count} nova${conv.unread_count > 1 ? 's' : ''}</span></div>` : ''}
         </div>`;
@@ -1047,10 +1046,6 @@ function selectDeal(itemEl, lead, conv) {
     // Mostra seção de atividades
     const actSection = document.getElementById('lp-activities-section');
     if (actSection) actSection.style.display = '';
-
-    // Info do deal selecionado acima dos botões
-    const infoEl = document.getElementById('lp-selected-deal-info');
-    if (infoEl) infoEl.innerHTML = `<span class="lp-muted">Deal:</span> <strong>#${selectedDealId}</strong> — ${escHtml(dealTitle)}`;
 
     // Esconde "Nenhum deal vinculado"
     const notfound = document.getElementById('lp-deal-notfound');
