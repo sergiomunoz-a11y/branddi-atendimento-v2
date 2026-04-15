@@ -381,8 +381,18 @@ export async function getSettings() {
 
 export function normalizePhone(phone) {
     if (!phone) return '';
-    const digits = String(phone).replace(/\D/g, '');
-    if (digits.startsWith('55') && digits.length >= 12) return digits.slice(2);
+    let digits = String(phone).replace(/\D/g, '');
+
+    // Remove country code 55
+    if (digits.startsWith('55') && digits.length >= 12) digits = digits.slice(2);
+
+    // Celular BR sem 9° dígito: DDD(2) + 8 dígitos = 10 → insere 9
+    if (digits.length === 10) {
+        const ddd = digits.slice(0, 2);
+        const num = digits.slice(2);
+        digits = `${ddd}9${num}`;
+    }
+
     return digits;
 }
 

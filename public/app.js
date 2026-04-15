@@ -344,12 +344,21 @@ function setInboxType(type) {
 }
 
 
+let _lastInboxHash = '';
+
 async function loadInbox(silent = false) {
     try {
         const typeParam = currentTypeFilter !== 'all' ? `&type=${currentTypeFilter}` : '';
         const data = await apiFetch(`/api/inbox?limit=100${typeParam}`);
+        const newConversations = data.conversations || [];
+
+        // Hash rápido para detectar mudanças e evitar re-render desnecessário (flicker)
+        const newHash = JSON.stringify(newConversations.map(c => `${c.id}:${c.status}:${c.unread_count}:${c.last_message?.created_at}`));
+        if (silent && newHash === _lastInboxHash) return; // Nada mudou
+        _lastInboxHash = newHash;
+
         const prevIds = new Set(allConversations.map(c => c.id));
-        allConversations = data.conversations || [];
+        allConversations = newConversations;
 
         if (silent) {
             const newConvs = allConversations.filter(c => !prevIds.has(c.id));
@@ -398,7 +407,7 @@ function renderConversationList() {
 
     list.innerHTML = filtered.map(conv => {
         const lead = conv.leads || {};
-        const name = lead.name || lead.phone || 'Desconhecido';
+        const name = lead.name || formatPhone(lead.phone) || 'Desconhecido';
         const preview = conv.last_message?.content ? truncate(conv.last_message.content, 55) : '...';
         const time = conv.last_message ? relativeTime(conv.last_message.created_at) : relativeTime(conv.created_at);
         const isActive = currentConversation?.id === conv.id;
@@ -411,13 +420,9 @@ function renderConversationList() {
                 <span class="conv-name">${escHtml(name)}</span>
                 <span class="conv-time">${time}</span>
             </div>
-            ${lead.company_name ? `<div class="conv-company">🏢 ${escHtml(lead.company_name)}</div>` : ''}
+            ${lead.company_name ? `<div class="conv-company">${escHtml(lead.company_name)}</div>` : ''}
             <div class="conv-preview">${escHtml(preview)}</div>
-            <div class="conv-tags">
-                <span class="conv-type-badge ${convType}">${typeLabel}</span>
-                ${conv.status === 'waiting' ? '<span class="tag tag-waiting">⏳ Aguardando</span>' : ''}
-                ${hasUnread ? `<span class="tag tag-unread">${conv.unread_count} nova${conv.unread_count > 1 ? 's' : ''}</span>` : ''}
-            </div>
+            ${hasUnread ? `<div class="conv-tags"><span class="tag tag-unread">${conv.unread_count} nova${conv.unread_count > 1 ? 's' : ''}</span></div>` : ''}
         </div>`;
     }).join('');
 }
@@ -445,7 +450,7 @@ async function selectConversation(convId) {
 
 function renderChatArea(conv) {
     const lead = conv.leads || {};
-    const name = lead.name || lead.phone || 'Desconhecido';
+    const name = lead.name || formatPhone(lead.phone) || 'Desconhecido';
     const initials = name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
     const cls = lead.classification || 'unclassified';
 
@@ -636,7 +641,7 @@ async function applyScript(scriptId) {
 
 function renderLeadPanel(conv) {
     const lead = conv.leads || {};
-    const name = lead.name || lead.phone || 'Desconhecido';
+    const name = lead.name || formatPhone(lead.phone) || 'Desconhecido';
     const initial = name.charAt(0).toUpperCase();
     const convType = conv.type || 'inbound';
     const typeLabel = convType === 'prospecting' ? '🚀 Prospeccao' : '📥 Inbound';
@@ -653,7 +658,7 @@ function renderLeadPanel(conv) {
     const nameEl = document.getElementById('lp-name');
     if (nameEl) nameEl.textContent = name;
     const phoneEl = document.getElementById('lp-phone');
-    if (phoneEl) phoneEl.textContent = lead.phone || '—';
+    if (phoneEl) phoneEl.textContent = formatPhone(lead.phone);
     const compEl = document.getElementById('lp-company');
     if (compEl) {
         compEl.textContent = lead.company_name || '';
@@ -1522,6 +1527,15 @@ function escHtml(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function truncate(str, n) { return str.length > n ? str.slice(0, n) + '...' : str; }
+function formatPhone(phone) {
+    if (!phone) return '—';
+    const d = String(phone).replace(/\D/g, '');
+    // 11 dígitos BR: (DD) 9XXXX-XXXX
+    if (d.length === 11) return `(${d.slice(0,2)}) ${d[2]}${d.slice(3,7)}-${d.slice(7)}`;
+    // 10 dígitos: (DD) XXXX-XXXX
+    if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+    return phone;
+}
 function classLabel(cls) {
     return { comercial: '🟢 Comercial', opec: '🟡 OPEC', unclassified: '⚪ Aguardando', prospecting: '🔵 Prospeccao' }[cls] || cls || '—';
 }
