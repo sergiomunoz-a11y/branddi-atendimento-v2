@@ -129,7 +129,7 @@ export async function getInbox({
         .select(`
             *,
             leads(id, name, phone, company_name, classification, origin),
-            messages(id, content, direction, sender_type, sender_name, created_at, read_at)
+            messages(id, content, direction, sender_type, sender_name, sent_by_name, created_at, read_at)
         `)
         .neq('status', 'closed')
         .order('updated_at', { ascending: false })
