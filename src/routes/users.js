@@ -12,7 +12,7 @@ const router = Router();
 const adminOnly = [requireAuth, requireRole('Admin')];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VALID_ROLES = ['SDR', 'Closer', 'Admin'];
+const VALID_ROLES = ['Usuario', 'Admin'];
 
 // ─── GET /api/users — lista todos os usuários ─────────────────────────
 router.get('/users', ...adminOnly, async (req, res) => {

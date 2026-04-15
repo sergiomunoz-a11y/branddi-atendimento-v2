@@ -70,6 +70,7 @@ router.post('/messages/:conversationId/send', async (req, res) => {
                     await updateConversation(req.params.conversationId, {
                         chatbot_stage: 'human', status: 'in_progress',
                         last_message_at: new Date().toISOString(),
+                        assigned_user_id: req.user?.id || null,
                     });
                     // Auto-create WhatsApp activity in Pipedrive (fire and forget)
                     onOutboundMessage(req.params.conversationId, req.user?.id).catch(() => {});
@@ -95,11 +96,12 @@ router.post('/messages/:conversationId/send', async (req, res) => {
             unipile_message_id: `human_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         });
 
-        // Garante que a conversa está em modo humano
+        // Garante que a conversa está em modo humano + auto-atribui ao usuário
         await updateConversation(req.params.conversationId, {
             chatbot_stage: 'human',
             status: 'in_progress',
             last_message_at: new Date().toISOString(),
+            assigned_user_id: req.user?.id || null,
         });
 
         // Auto-create WhatsApp activity in Pipedrive (fire and forget)
@@ -147,6 +149,7 @@ router.post('/messages/:conversationId/script', async (req, res) => {
             chatbot_stage: 'human',
             status: 'in_progress',
             last_message_at: new Date().toISOString(),
+            assigned_user_id: req.user?.id || null,
         });
 
         // Auto-create WhatsApp activity in Pipedrive (fire and forget)

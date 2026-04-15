@@ -305,6 +305,19 @@ function setupInboxFilters() {
         });
     });
 
+    // Filtro por usuário (Admin only)
+    const userFilterEl = document.getElementById('inbox-user-filter');
+    if (userFilterEl && currentUser?.role === 'Admin') {
+        userFilterEl.style.display = '';
+        userFilterEl.addEventListener('change', () => loadInbox());
+        // Popula lista de usuários
+        apiFetch('/api/users').then(data => {
+            const users = data.users || [];
+            userFilterEl.innerHTML = '<option value="">Todos os usuários</option>' +
+                users.map(u => `<option value="${u.id}">${escHtml(u.name)} (${u.role})</option>`).join('');
+        }).catch(() => {});
+    }
+
     // Abas de tipo (Inbound / Prospeccao)
     document.querySelectorAll('.type-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -323,7 +336,6 @@ function setupInboxFilters() {
         const perms = currentUser.permissions || {};
         const allowedTypes = perms.conversation_types || [];
 
-        // Se tem permissões definidas, usa elas; senão fallback para role
         if (allowedTypes.length > 0) {
             const hasInbound = allowedTypes.includes('inbound');
             const hasProspecting = allowedTypes.includes('prospecting');
@@ -339,18 +351,8 @@ function setupInboxFilters() {
                 if (tabInbound) tabInbound.style.display = 'none';
                 if (tabProspecting) { tabProspecting.classList.add('active'); currentTypeFilter = 'prospecting'; }
             }
-        } else {
-            // Fallback legacy por role
-            if (currentUser.role === 'SDR') {
-                if (tabAll) tabAll.style.display = 'none';
-                if (tabInbound) tabInbound.style.display = 'none';
-                if (tabProspecting) { tabProspecting.classList.add('active'); currentTypeFilter = 'prospecting'; }
-            } else if (currentUser.role === 'Closer') {
-                if (tabAll) tabAll.style.display = 'none';
-                if (tabProspecting) tabProspecting.style.display = 'none';
-                if (tabInbound) { tabInbound.classList.add('active'); currentTypeFilter = 'inbound'; }
-            }
         }
+        // Sem permissions definidas = vê tudo (filtro é por assigned_user_id no backend)
     }
 }
 
@@ -385,7 +387,9 @@ let _lastInboxHash = '';
 async function loadInbox(silent = false) {
     try {
         const typeParam = currentTypeFilter !== 'all' ? `&type=${currentTypeFilter}` : '';
-        const data = await apiFetch(`/api/inbox?limit=100${typeParam}`);
+        const userFilter = document.getElementById('inbox-user-filter')?.value;
+        const userParam = userFilter ? `&filter_user_id=${userFilter}` : '';
+        const data = await apiFetch(`/api/inbox?limit=100${typeParam}${userParam}`);
         const newConversations = data.conversations || [];
 
         // Hash rápido para detectar mudanças e evitar re-render desnecessário (flicker)
@@ -1607,7 +1611,7 @@ function setupCurrentUser() {
     const container = document.getElementById('side-nav-user');
     if (!container) return;
 
-    const roleColors = { Admin: '#a78bfa', Closer: '#60a5fa', SDR: '#34d399' };
+    const roleColors = { Admin: '#a78bfa', Usuario: '#34d399' };
     const roleColor  = roleColors[currentUser.role] || '#8b949e';
 
     container.className = 'side-nav-user';
@@ -2029,7 +2033,7 @@ function openAddUserForm() {
     const pwEl = document.getElementById('uf-password');
     if (pwEl) pwEl.value = '';
     const roleEl = document.getElementById('uf-role');
-    if (roleEl) roleEl.value = 'SDR';
+    if (roleEl) roleEl.value = 'Usuario';
     const tokenEl = document.getElementById('uf-pipedrive-token');
     if (tokenEl) { tokenEl.value = ''; tokenEl.placeholder = 'Cole o token aqui (Pipedrive > Config > Preferencias > API)'; }
     const tokenStatus = document.getElementById('uf-token-status');

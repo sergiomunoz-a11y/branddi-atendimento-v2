@@ -9,10 +9,10 @@ import { queueConversationSync } from '../services/crm-sync.js';
 
 const router = Router();
 
-// ─── GET /api/inbox — Lista conversas filtradas por role ──────────────
+// ─── GET /api/inbox — Lista conversas filtradas por role/usuário ──────
 router.get('/inbox', async (req, res) => {
     try {
-        const { status, type, limit = 50 } = req.query;
+        const { status, type, limit = 50, filter_user_id } = req.query;
         const user   = req.user || {};
         const role   = user.role;
         const userId = user.id;
@@ -25,6 +25,7 @@ router.get('/inbox', async (req, res) => {
             role,
             user_id: userId,
             allowed_types: role === 'Admin' ? null : (permissions.conversation_types || []),
+            filter_user_id: role === 'Admin' ? (filter_user_id || null) : null,
         });
         res.json({ conversations, total: conversations.length });
     } catch (err) {

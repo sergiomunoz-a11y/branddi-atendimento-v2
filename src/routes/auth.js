@@ -109,13 +109,13 @@ router.post('/auth/google', async (req, res) => {
         }
 
         if (!user) {
-            // Primeiro login — cria user com role SDR
+            // Primeiro login — cria user com role Usuario
             const pw = await hashPassword(`google_${googleId}_${Date.now()}`);
             const { data: newUser, error: createErr } = await supabase.from('platform_users').insert({
                 email: email.toLowerCase(),
                 name: name || email.split('@')[0],
                 password_hash: pw,
-                role: 'SDR',
+                role: 'Usuario',
                 google_id: googleId,
                 avatar_url: picture || null,
                 permissions: {},

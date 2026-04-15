@@ -123,6 +123,7 @@ export async function updateConversation(id, updates) {
 export async function getInbox({
     status, assigned_to, limit = 50,
     type, role, user_id, allowed_types,
+    filter_user_id, // Admin pode filtrar por usuário específico
 } = {}) {
     let query = supabase
         .from('conversations')
@@ -138,21 +139,26 @@ export async function getInbox({
 
     if (status) query = query.eq('status', status);
 
-    // Filtro por tipo: param explícito > permissões do usuário > role legacy
+    // Filtro por tipo de conversa
     if (type) {
         query = query.eq('type', type);
     } else if (allowed_types && allowed_types.length > 0) {
         query = query.in('type', allowed_types);
-    } else if (role === 'SDR') {
-        query = query.eq('type', 'prospecting');
-    } else if (role === 'Closer') {
-        query = query.eq('type', 'inbound');
+    }
+
+    // Filtro por usuário: Admin vê tudo (com filtro opcional), demais só as próprias
+    if (role === 'Admin') {
+        if (filter_user_id) {
+            query = query.eq('assigned_user_id', filter_user_id);
+        }
+        // Sem filter_user_id, Admin vê tudo
+    } else if (user_id) {
+        // Não-Admin: só conversas atribuídas a ele
+        query = query.eq('assigned_user_id', user_id);
     }
 
     if (assigned_to) {
         query = query.eq('assigned_to', assigned_to);
-    } else if (role === 'SDR' && user_id) {
-        query = query.eq('assigned_to', user_id);
     }
 
     const { data, error } = await query;
