@@ -426,14 +426,12 @@
     <div class="panel-header">
         <h2 class="panel-title">Deals Pipedrive</h2>
         <div class="panel-actions">
-            <input type="search" class="search-input" id="deals-search" placeholder="Buscar deal por nome ou empresa..." autocomplete="off" />
-            <button class="btn-sm btn-primary" id="btn-import-history">Importar Historico WhatsApp</button>
+            <button class="btn-sm btn-outline" id="btn-import-history">Importar Historico WhatsApp</button>
         </div>
     </div>
-    <div class="deals-grid" id="deals-grid">
-        <div class="empty-state-pro">
-            <h4 class="empty-title">Carregando deals...</h4>
-        </div>
+    <div class="deals-search-wrap">
+        <input type="search" class="deals-search-input" id="deals-search" placeholder="Digite o nome da empresa ou deal para buscar..." autocomplete="off" />
+        <div class="deals-results" id="deals-results"></div>
     </div>
 
     <!-- Modal: contatos do deal -->

@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Deals tab events
     document.getElementById('btn-send-outbound')?.addEventListener('click', sendOutbound);
     document.getElementById('btn-import-history')?.addEventListener('click', importWhatsAppHistory);
-    document.getElementById('deals-search')?.addEventListener('input', debounce(renderDealsGrid, 300));
+    document.getElementById('deals-search')?.addEventListener('input', debounce(searchDeals, 400));
 
     // Fix autofill: browser ignora autocomplete=off, limpamos via JS
     document.querySelectorAll('.sidebar-search, .search-input').forEach(el => { el.value = ''; });
@@ -2339,67 +2339,62 @@ function setupHistoryFilters() {
 // ─── DEALS TAB (Pipedrive Integration) ─────────────────────────────
 // ===================================================================
 
-let _allDeals = [];
 let _selectedDealForOutbound = null;
 let _selectedContactForOutbound = null;
 
-async function loadDeals() {
-    const grid = document.getElementById('deals-grid');
-    if (!grid) return;
-    grid.innerHTML = '<div class="empty-state-pro"><h4 class="empty-title">Carregando deals do Pipedrive...</h4></div>';
-
-    try {
-        const data = await apiFetch('/api/pipedrive/my-deals');
-        _allDeals = data?.deals || [];
-        if (data?.error) {
-            grid.innerHTML = `<div class="empty-state-pro"><h4 class="empty-title">Aviso</h4><p class="empty-desc">${escHtml(data.error)}</p></div>`;
-            if (_allDeals.length === 0) return;
-        }
-        renderDealsGrid();
-    } catch (err) {
-        grid.innerHTML = `<div class="empty-state-pro"><h4 class="empty-title">Erro ao carregar deals</h4><p class="empty-desc">${escHtml(err.message)}</p></div>`;
-    }
+function loadDeals() {
+    // Deals tab agora é busca — foca no input
+    const input = document.getElementById('deals-search');
+    if (input) { input.value = ''; input.focus(); }
+    const results = document.getElementById('deals-results');
+    if (results) results.innerHTML = '<div class="deals-empty">Digite o nome da empresa ou deal acima para buscar no Pipedrive</div>';
 }
 
-function renderDealsGrid() {
-    const grid = document.getElementById('deals-grid');
-    if (!grid) return;
+async function searchDeals() {
+    const input = document.getElementById('deals-search');
+    const results = document.getElementById('deals-results');
+    if (!input || !results) return;
 
-    const searchTerm = (document.getElementById('deals-search')?.value || '').toLowerCase();
-    let deals = _allDeals;
-    if (searchTerm) {
-        deals = deals.filter(d =>
-            (d.title || '').toLowerCase().includes(searchTerm) ||
-            (d.org_name || '').toLowerCase().includes(searchTerm) ||
-            (d.person_name || '').toLowerCase().includes(searchTerm)
-        );
-    }
-
-    if (deals.length === 0) {
-        grid.innerHTML = '<div class="empty-state-pro"><h4 class="empty-title">Nenhum deal encontrado</h4><p class="empty-desc">Verifique se seu usuario esta vinculado ao Pipedrive nas configuracoes.</p></div>';
+    const q = input.value.trim();
+    if (q.length < 2) {
+        results.innerHTML = '<div class="deals-empty">Digite pelo menos 2 caracteres para buscar</div>';
         return;
     }
 
-    grid.innerHTML = deals.map(d => {
-        const phoneList = (d.person_phones || []).map(p => escHtml(p)).join(', ');
-        const hasPhone = d.has_phone;
-        return `
-        <div class="deal-card${hasPhone ? '' : ' no-phone'}" data-deal-id="${d.id}">
-            <div class="deal-card-header">
-                <div class="deal-card-org">${escHtml(d.org_name)}</div>
-                <div class="deal-card-value">${escHtml(d.value)}</div>
-            </div>
-            <div class="deal-card-title">${escHtml(d.title)}</div>
-            <div class="deal-card-meta">
-                <span class="deal-stage-badge">${escHtml(d.stage_name)}</span>
-            </div>
-            <div class="deal-card-person">
-                <span>${escHtml(d.person_name)}</span>
-                ${hasPhone ? `<span class="deal-phone">${phoneList}</span>` : '<span class="deal-no-phone">Sem telefone</span>'}
-            </div>
-            ${hasPhone ? `<button class="btn-sm btn-primary deal-start-btn" data-action="open-deal-contacts" data-deal-id="${d.id}">Iniciar WhatsApp</button>` : ''}
-        </div>`;
-    }).join('');
+    results.innerHTML = '<div class="deals-empty">Buscando...</div>';
+
+    try {
+        const data = await apiFetch(`/api/pipedrive/search-deals?q=${encodeURIComponent(q)}`);
+        const deals = data?.deals || [];
+
+        if (deals.length === 0) {
+            results.innerHTML = '<div class="deals-empty">Nenhum deal encontrado para "' + escHtml(q) + '"</div>';
+            return;
+        }
+
+        results.innerHTML = deals.map(d => {
+            const phoneList = (d.person_phones || []).join(', ');
+            return `
+            <div class="deal-result-item" data-action="open-deal-contacts" data-deal-id="${d.id}">
+                <div class="deal-result-left">
+                    <div class="deal-result-title">${escHtml(d.title)}</div>
+                    <div class="deal-result-meta">
+                        <span class="deal-result-org">${escHtml(d.org_name)}</span>
+                        <span class="deal-stage-badge">${escHtml(d.stage_name)}</span>
+                        <span class="deal-result-value">${escHtml(d.value)}</span>
+                    </div>
+                    <div class="deal-result-person">
+                        ${escHtml(d.person_name)}${phoneList ? ' — ' + escHtml(phoneList) : ''}
+                    </div>
+                </div>
+                <div class="deal-result-right">
+                    ${d.has_phone ? '<span class="deal-result-action">Iniciar WhatsApp →</span>' : '<span class="deal-no-phone">Sem telefone</span>'}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        results.innerHTML = '<div class="deals-empty">Erro: ' + escHtml(err.message) + '</div>';
+    }
 }
 
 async function openDealContacts(dealId) {

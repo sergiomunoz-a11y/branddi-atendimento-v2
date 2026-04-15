@@ -17,74 +17,40 @@ import logger from '../services/logger.js';
 
 const router = Router();
 
-// ─── GET /api/pipedrive/my-deals — Deals do SDR logado ──────────────
-// Retorna deals dos pipelines outbound onde o user é owner ou SDR designado
-router.get('/pipedrive/my-deals', async (req, res) => {
+// ─── GET /api/pipedrive/search-deals — Busca deals por termo ─────────
+// Autocomplete: busca no Pipedrive por título/org e retorna matches com telefone
+router.get('/pipedrive/search-deals', async (req, res) => {
     try {
-        const user = req.user || {};
-        const pdUserId = user.pipedrive_user_id;
-        const isAdmin = user.role === 'Admin';
+        const { q } = req.query;
+        if (!q || q.length < 2) return res.json({ deals: [] });
 
-        // Pipelines outbound: 3 (Outbound BB/VM/Fraude), 29 (Outbound Automatizado), 5 (Inbound SDR)
-        const pipelineIds = [3, 29, 5];
-        const allDeals = [];
+        const data = await pdGet(`/deals/search?term=${encodeURIComponent(q)}&limit=15&status=open`);
+        const items = data?.data?.items || [];
 
-        for (const pipelineId of pipelineIds) {
-            // Admin sem pdUserId: busca todos. SDR: filtra por owner.
-            const userFilter = pdUserId ? `&user_id=${pdUserId}` : '';
-            const data = await pdGet(`/deals?pipeline_id=${pipelineId}&status=open${userFilter}&limit=100`);
-            const deals = data?.data || [];
-            allDeals.push(...deals);
-        }
-
-        // Enriquece com dados de person (telefone, nome)
-        const enriched = allDeals.map(d => {
-            const person = d.person_id || {};
-            const phones = person.phone || [];
-            const hasPhone = phones.some(p => p.value && p.value.length > 5);
+        const deals = items.map(item => {
+            const d = item.item;
+            const person = d.person || {};
+            const phones = (person.phones || []).filter(p => p && p.length > 5);
 
             return {
                 id: d.id,
                 title: d.title,
-                org_name: d.org_name || d.org_id?.name || '—',
-                stage_name: d.stage_order_nr != null ? `Stage ${d.stage_order_nr}` : '—',
-                stage_id: d.stage_id,
-                pipeline_id: d.pipeline_id,
-                value: d.formatted_value || '—',
-                person_id: person.value || person.id || null,
-                person_name: person.name || d.person_name || '—',
-                person_phones: phones.filter(p => p.value && p.value.length > 5).map(p => p.value),
-                person_email: person.email?.[0]?.value || null,
-                has_phone: hasPhone,
-                last_activity_date: d.last_activity_date,
-                next_activity_date: d.next_activity_date,
-                label: d.label,
-                owner_name: d.owner_name,
+                org_name: d.organization?.name || '—',
+                stage_name: d.stage?.name || '—',
+                stage_id: d.stage?.id,
+                pipeline_id: d.pipeline?.id,
+                value: d.value != null ? `R$ ${Number(d.value).toLocaleString('pt-BR')}` : '—',
+                person_id: person.id || null,
+                person_name: person.name || '—',
+                person_phones: phones,
+                has_phone: phones.length > 0,
+                owner_name: d.owner?.name || '—',
             };
         });
 
-        // Resolve stage names
-        const stageCache = {};
-        for (const deal of enriched) {
-            if (deal.stage_id && !stageCache[deal.stage_id]) {
-                try {
-                    const stageData = await pdGet(`/stages/${deal.stage_id}`);
-                    stageCache[deal.stage_id] = stageData?.data?.name || '—';
-                } catch { stageCache[deal.stage_id] = '—'; }
-            }
-            deal.stage_name = stageCache[deal.stage_id] || deal.stage_name;
-        }
-
-        // Sort: deals com telefone primeiro, depois por última atividade
-        enriched.sort((a, b) => {
-            if (a.has_phone && !b.has_phone) return -1;
-            if (!a.has_phone && b.has_phone) return 1;
-            return 0;
-        });
-
-        res.json({ deals: enriched, total: enriched.length });
+        res.json({ deals });
     } catch (err) {
-        logger.error('Pipedrive my-deals error', { error: err.message });
+        logger.error('Pipedrive search-deals error', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
