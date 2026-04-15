@@ -727,10 +727,30 @@ a.nav-btn { text-decoration: none; }
 }
 
 /* Botoes de atividade */
+.lp-act-buttons { display: flex; flex-direction: column; gap: 6px; }
 .lp-act-btn {
     width: 100%; text-align: left;
     display: flex; align-items: center; gap: 6px;
 }
+
+/* Pipedrive Person Labels */
+.lp-labels-container { display: flex; flex-wrap: wrap; gap: 6px; }
+.pd-label-btn {
+    padding: 4px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; font-family: var(--font);
+    cursor: pointer; transition: all .2s;
+    background: transparent;
+    border: 1.5px solid color-mix(in srgb, var(--label-color) 40%, transparent);
+    color: var(--label-color);
+    opacity: .5;
+}
+.pd-label-btn:hover { opacity: .8; }
+.pd-label-btn.active {
+    opacity: 1;
+    background: color-mix(in srgb, var(--label-color) 15%, transparent);
+    border-color: var(--label-color);
+}
+.pd-label-btn:disabled { pointer-events: none; opacity: .3; }
 
 /* Botoes genericos small */
 .btn-sm {

@@ -9,7 +9,7 @@ import {
 import { queueLeadSync } from '../services/crm-sync.js';
 import {
     createPerson, findPersonByPhone, findOrCreateOrg, createDeal,
-    findPersonWithDeals, pdGet
+    findPersonWithDeals, pdGet, getPersonLabelOptions, updatePersonLabels
 } from '../services/pipedrive.js';
 import { validate } from '../middleware/validate.js';
 
@@ -212,11 +212,25 @@ router.get('/leads/:id/deals', async (req, res) => {
         const allDeals = [];
         const persons = [];
 
+        const labelOptions = getPersonLabelOptions();
+
         for (const { person, deals } of results) {
+            // Resolve label names from IDs
+            const personLabelIds = person.label_ids || [];
+            const personLabels = personLabelIds.map(id => {
+                const opt = labelOptions.find(o => o.id === id);
+                return opt || { id, label: `#${id}`, color: 'gray' };
+            });
+
             persons.push({
                 id: person.id,
                 name: person.name,
-                phone: person.phones?.[0] || lead.phone,
+                phone: person.phone?.[0]?.value || lead.phone,
+                email: person.email?.[0]?.value || null,
+                job_title: person.job_title || null,
+                org_name: person.org_name || null,
+                label_ids: personLabelIds,
+                labels: personLabels,
             });
 
             for (const d of deals) {
@@ -245,7 +259,29 @@ router.get('/leads/:id/deals', async (req, res) => {
             }
         }
 
-        res.json({ deals: allDeals, persons });
+        res.json({ deals: allDeals, persons, label_options: labelOptions });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── PUT /api/leads/:id/person-labels — Atualiza etiquetas do Person ──
+router.put('/leads/:id/person-labels', async (req, res) => {
+    try {
+        const { person_id, label_ids } = req.body;
+        if (!person_id) return res.status(400).json({ error: 'person_id obrigatório' });
+        if (!Array.isArray(label_ids)) return res.status(400).json({ error: 'label_ids deve ser array' });
+
+        const updated = await updatePersonLabels(parseInt(person_id), label_ids);
+        if (!updated) return res.status(500).json({ error: 'Falha ao atualizar etiquetas' });
+
+        const labelOptions = getPersonLabelOptions();
+        const labels = (updated.label_ids || []).map(id => {
+            const opt = labelOptions.find(o => o.id === id);
+            return opt || { id, label: `#${id}`, color: 'gray' };
+        });
+
+        res.json({ ok: true, label_ids: updated.label_ids || [], labels });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

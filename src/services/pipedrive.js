@@ -156,6 +156,7 @@ export async function findPersonWithDeals(phone) {
     const seenPersonIds = new Set();
     const results = [];
 
+    // Busca com TODOS os termos para cobrir variações de formato (com/sem 9°dígito)
     for (const term of terms) {
         const res = await pdGet(`/persons/search?term=${term}&fields=phone&limit=5`);
         const items = res.data?.items || [];
@@ -165,13 +166,39 @@ export async function findPersonWithDeals(phone) {
             if (seenPersonIds.has(person.id)) continue;
             seenPersonIds.add(person.id);
 
+            // Busca dados completos do person (inclui label_ids)
+            const fullPerson = await getPersonFull(person.id);
             const deals = await getDealsForPerson(person.id);
-            results.push({ person, deals });
+            results.push({ person: fullPerson || person, deals });
         }
-
-        if (results.length > 0) break; // encontrou com este termo, não precisa tentar menos específico
     }
     return results;
+}
+
+// ─── Person Labels ──────────────────────────────────────────────────
+
+// Etiquetas disponíveis no Pipedrive (cache estático)
+const PERSON_LABEL_OPTIONS = [
+    { id: 418, label: 'Brand Bidding', color: 'blue' },
+    { id: 419, label: 'Fraude', color: 'red' },
+    { id: 420, label: 'Violação de Marca', color: 'yellow' },
+    { id: 421, label: 'BUY BOX PROTECTION', color: 'purple' },
+    { id: 542, label: 'BLACKLIST', color: 'dark-gray' },
+    { id: 543, label: 'NÃO CONTATAR WHATSAPP', color: 'green' },
+];
+
+export function getPersonLabelOptions() {
+    return PERSON_LABEL_OPTIONS;
+}
+
+export async function getPersonFull(personId) {
+    const res = await pdGet(`/persons/${personId}`);
+    return res.data || null;
+}
+
+export async function updatePersonLabels(personId, labelIds) {
+    const res = await pdPut(`/persons/${personId}`, { label_ids: labelIds });
+    return res.data || null;
 }
 
 // ─── Pipelines ────────────────────────────────────────────────────────

@@ -824,6 +824,11 @@ async function loadDealsForLead(lead, conv) {
     try {
         const data = await apiFetch(`/api/leads/${lead.id}/deals`);
         const deals = data?.deals || [];
+        const persons = data?.persons || [];
+        const labelOptions = data?.label_options || [];
+
+        // Renderiza labels do person (primeiro person encontrado)
+        renderPersonLabels(lead, persons, labelOptions);
 
         if (deals.length === 0) {
             if (notfound) notfound.style.display = '';
@@ -960,6 +965,72 @@ async function createReplyActivity(conv, lead) {
     }
 }
 
+
+// --- Pipedrive Person Labels ---
+
+function renderPersonLabels(lead, persons, labelOptions) {
+    const container = document.getElementById('lp-labels-container');
+    const section = document.getElementById('lp-labels-section');
+    if (!container) return;
+
+    if (!persons || persons.length === 0) {
+        container.innerHTML = '<span class="lp-muted">Número não encontrado no Pipedrive</span>';
+        return;
+    }
+
+    // Usa o primeiro person (mais relevante)
+    const person = persons[0];
+    const currentLabelIds = person.label_ids || [];
+
+    const colorMap = { blue: '#3B82F6', red: '#EF4444', yellow: '#EAB308', purple: '#A855F7', 'dark-gray': '#6B7280', green: '#22C55E' };
+
+    container.innerHTML = labelOptions.map(opt => {
+        const active = currentLabelIds.includes(opt.id);
+        const color = colorMap[opt.color] || '#6B7280';
+        return `<button class="pd-label-btn${active ? ' active' : ''}" data-label-id="${opt.id}" data-person-id="${person.id}" style="--label-color: ${color}">
+            ${escHtml(opt.label)}
+        </button>`;
+    }).join('');
+
+    // Click handler — toggle label
+    container.onclick = async (e) => {
+        const btn = e.target.closest('.pd-label-btn');
+        if (!btn) return;
+
+        const labelId = parseInt(btn.dataset.labelId);
+        const personId = parseInt(btn.dataset.personId);
+        const isActive = btn.classList.contains('active');
+
+        // Toggle
+        let newLabelIds;
+        if (isActive) {
+            newLabelIds = currentLabelIds.filter(id => id !== labelId);
+        } else {
+            newLabelIds = [...currentLabelIds, labelId];
+        }
+
+        btn.classList.toggle('active');
+        btn.disabled = true;
+
+        try {
+            const res = await apiFetch(`/api/leads/${lead.id}/person-labels`, {
+                method: 'PUT',
+                body: JSON.stringify({ person_id: personId, label_ids: newLabelIds }),
+            });
+            // Update local state
+            person.label_ids = res.label_ids || newLabelIds;
+            currentLabelIds.length = 0;
+            currentLabelIds.push(...person.label_ids);
+            toast(`Etiqueta ${isActive ? 'removida' : 'adicionada'}`, 'success');
+        } catch (err) {
+            // Revert toggle on error
+            btn.classList.toggle('active');
+            toast(`Erro: ${err.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    };
+}
 
 function renderScriptsPanelList() {
     const list = document.getElementById('scripts-panel-list');

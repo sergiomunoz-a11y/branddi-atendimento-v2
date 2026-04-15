@@ -193,6 +193,28 @@
                     </div>
                 </div>
 
+                <!-- Atividades Pipedrive (aparece quando deal selecionado) -->
+                <div class="lp-section" id="lp-activities-section" style="display:none">
+                    <div class="lp-section-title">Registrar atividade</div>
+                    <div class="lp-selected-deal-info" id="lp-selected-deal-info"></div>
+                    <div class="lp-act-buttons">
+                        <button class="btn-sm btn-outline lp-act-btn" id="btn-act-whatsapp">
+                            📱 Transcricao WhatsApp
+                        </button>
+                        <button class="btn-sm btn-outline lp-act-btn" id="btn-act-reply">
+                            💬 Registrar Resposta
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Etiquetas Pipedrive -->
+                <div class="lp-section" id="lp-labels-section">
+                    <div class="lp-section-title">Etiquetas Pipedrive</div>
+                    <div class="lp-labels-container" id="lp-labels-container">
+                        <span class="lp-muted">Carregando...</span>
+                    </div>
+                </div>
+
                 <!-- Historico de conversas do lead -->
                 <div class="lp-section">
                     <div class="lp-section-title">Historico de conversas</div>
@@ -201,31 +223,19 @@
                     </div>
                 </div>
 
-                <!-- Eventos da conversa -->
-                <div class="lp-section">
-                    <div class="lp-section-title">Eventos da conversa</div>
-                    <div class="lp-events-list" id="lp-events-list">
-                        <span class="lp-muted">Nenhum evento registrado</span>
-                    </div>
-                </div>
-
-                <!-- Atividades Pipedrive (aparece quando deal selecionado) -->
-                <div class="lp-section" id="lp-activities-section" style="display:none">
-                    <div class="lp-section-title">Registrar atividade</div>
-                    <div class="lp-selected-deal-info" id="lp-selected-deal-info"></div>
-                    <button class="btn-sm btn-outline lp-act-btn" id="btn-act-whatsapp">
-                        📱 Transcricao WhatsApp
-                    </button>
-                    <button class="btn-sm btn-outline lp-act-btn" id="btn-act-reply">
-                        💬 Registrar Resposta do Lead
-                    </button>
-                </div>
-
                 <!-- Botao sincronizar Pipedrive -->
                 <div class="lp-section">
                     <button class="btn-sm btn-outline" id="btn-sync-pipedrive-lp" style="width:100%">
                         🔄 Sincronizar com Pipedrive
                     </button>
+                </div>
+
+                <!-- Eventos da conversa (no final) -->
+                <div class="lp-section">
+                    <div class="lp-section-title">Eventos da conversa</div>
+                    <div class="lp-events-list" id="lp-events-list">
+                        <span class="lp-muted">Nenhum evento registrado</span>
+                    </div>
                 </div>
 
             </div>
