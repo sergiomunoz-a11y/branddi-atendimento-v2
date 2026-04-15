@@ -18,35 +18,45 @@ import logger from '../services/logger.js';
 const router = Router();
 
 // ─── GET /api/pipedrive/search-deals — Busca deals por termo ─────────
-// Autocomplete: busca no Pipedrive por título/org e retorna matches com telefone
 router.get('/pipedrive/search-deals', async (req, res) => {
     try {
         const { q } = req.query;
         if (!q || q.length < 2) return res.json({ deals: [] });
 
-        const data = await pdGet(`/deals/search?term=${encodeURIComponent(q)}&limit=15&status=open`);
+        // Busca sem filtro de status — mostra open, won, lost
+        const data = await pdGet(`/deals/search?term=${encodeURIComponent(q)}&limit=20`);
         const items = data?.data?.items || [];
 
-        const deals = items.map(item => {
+        const deals = [];
+        for (const item of items) {
             const d = item.item;
             const person = d.person || {};
             const phones = (person.phones || []).filter(p => p && p.length > 5);
 
-            return {
+            // Busca participants para ter mais contatos com telefone
+            let participantCount = 0;
+            try {
+                const pData = await pdGet(`/deals/${d.id}/participants?limit=5`);
+                participantCount = (pData?.data || []).length;
+            } catch { /* ignora */ }
+
+            const statusLabel = d.status === 'won' ? 'Ganho' : d.status === 'lost' ? 'Perdido' : 'Aberto';
+
+            deals.push({
                 id: d.id,
                 title: d.title,
+                status: d.status,
+                status_label: statusLabel,
                 org_name: d.organization?.name || '—',
                 stage_name: d.stage?.name || '—',
-                stage_id: d.stage?.id,
-                pipeline_id: d.pipeline?.id,
                 value: d.value != null ? `R$ ${Number(d.value).toLocaleString('pt-BR')}` : '—',
-                person_id: person.id || null,
                 person_name: person.name || '—',
                 person_phones: phones,
                 has_phone: phones.length > 0,
+                participant_count: participantCount,
                 owner_name: d.owner?.name || '—',
-            };
-        });
+            });
+        }
 
         res.json({ deals });
     } catch (err) {

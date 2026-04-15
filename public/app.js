@@ -834,7 +834,10 @@ function setupInlineEdit(lead, conv) {
             input.focus();
             input.select();
 
+            let _saving = false;
             const save = async () => {
+                if (_saving) return;
+                _saving = true;
                 const newVal = input.value.trim();
                 if (newVal && newVal !== currentVal) {
                     try {
@@ -848,22 +851,24 @@ function setupInlineEdit(lead, conv) {
                         loadInbox();
                     } catch (err) {
                         toast('Erro: ' + err.message, 'error');
+                        _saving = false;
                     }
                 }
                 cancel();
             };
 
             const cancel = () => {
-                input.remove();
+                if (input.parentElement) input.remove();
                 span.style.display = '';
                 btn.style.display = '';
             };
 
             input.addEventListener('keydown', e => {
-                if (e.key === 'Enter') save();
+                if (e.key === 'Enter') { e.preventDefault(); save(); }
                 if (e.key === 'Escape') cancel();
             });
-            input.addEventListener('blur', save);
+            // Blur: save only after small delay (avoid saving partial value on accidental click)
+            input.addEventListener('blur', () => setTimeout(() => { if (!_saving) save(); }, 200));
         };
     });
 }
@@ -2373,7 +2378,8 @@ async function searchDeals() {
         }
 
         results.innerHTML = deals.map(d => {
-            const phoneList = (d.person_phones || []).join(', ');
+            const statusCls = d.status === 'won' ? 'deal-won' : d.status === 'lost' ? 'deal-lost' : 'deal-open';
+            const participants = d.participant_count || 0;
             return `
             <div class="deal-result-item" data-action="open-deal-contacts" data-deal-id="${d.id}">
                 <div class="deal-result-left">
@@ -2381,14 +2387,15 @@ async function searchDeals() {
                     <div class="deal-result-meta">
                         <span class="deal-result-org">${escHtml(d.org_name)}</span>
                         <span class="deal-stage-badge">${escHtml(d.stage_name)}</span>
+                        <span class="deal-status-badge ${statusCls}">${escHtml(d.status_label)}</span>
                         <span class="deal-result-value">${escHtml(d.value)}</span>
                     </div>
                     <div class="deal-result-person">
-                        ${escHtml(d.person_name)}${phoneList ? ' — ' + escHtml(phoneList) : ''}
+                        ${escHtml(d.person_name)} ${participants > 0 ? `(+${participants} participantes)` : ''}
                     </div>
                 </div>
                 <div class="deal-result-right">
-                    ${d.has_phone ? '<span class="deal-result-action">Iniciar WhatsApp →</span>' : '<span class="deal-no-phone">Sem telefone</span>'}
+                    <span class="deal-result-action">Ver contatos →</span>
                 </div>
             </div>`;
         }).join('');
