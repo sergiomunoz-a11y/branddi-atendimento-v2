@@ -82,12 +82,21 @@ class UnipileProvider extends WhatsAppProvider {
     }
 
     normalizeContact(raw) {
-        const phone = raw.phone_number || raw.phone
+        // Phone: specifics.phone_number > public_identifier > raw.phone_number > provider_id (non-lid)
+        const phone = raw.specifics?.phone_number
+            || raw.phone_number
+            || raw.phone
+            || (raw.public_identifier && raw.public_identifier.replace(/@.*/, ''))
             || (!String(raw.provider_id || '').includes('@lid') && raw.provider_id)
-            || raw.id || '';
+            || '';
+
+        // Name: se parece telefone (+55...), ignorar — será resolvido depois via Pipedrive
+        const rawName = raw.name || null;
+        const name = rawName && /^\+?\d[\d\s\-()]+$/.test(rawName.trim()) ? null : rawName;
+
         return {
             phone,
-            name:       raw.name || null,
+            name,
             providerId: raw.provider_id || raw.id || null,
         };
     }
