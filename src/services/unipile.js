@@ -5,10 +5,11 @@
 import 'dotenv/config';
 import {
     findConversationByChat, createConversation, updateConversation,
-    findLeadByPhone, createLead, saveMessage, normalizePhone
+    findLeadByPhone, createLead, updateLead, saveMessage, normalizePhone
 } from './supabase.js';
 import { processChatbotMessage } from './chatbot-engine.js';
 import { onInboundMessage } from './auto-activities.js';
+import { findPersonByPhone, getDealsForPerson } from './pipedrive.js';
 import whatsapp from '../providers/index.js';
 import logger from './logger.js';
 
@@ -155,6 +156,29 @@ async function processChat(chat) {
                     origin: 'whatsapp_direct',
                     origin_metadata: { attendee_id: contact.providerId },
                 });
+            }
+
+            // Auto-match com Pipedrive (person + deals)
+            if (phone && !lead.crm_person_id) {
+                try {
+                    const pdPerson = await findPersonByPhone(phone);
+                    if (pdPerson) {
+                        const updates = {
+                            crm_person_id: String(pdPerson.id),
+                        };
+                        if (!lead.name || lead.name === phone) updates.name = pdPerson.name;
+                        if (!lead.company_name && pdPerson.org_name) updates.company_name = pdPerson.org_name;
+
+                        const deals = await getDealsForPerson(pdPerson.id);
+                        if (deals.length > 0) updates.crm_deal_id = String(deals[0].id);
+
+                        await updateLead(lead.id, updates);
+                        lead = { ...lead, ...updates };
+                        logger.info('Auto-matched lead with Pipedrive', { phone, person_id: pdPerson.id, deals: deals.length });
+                    }
+                } catch (err) {
+                    logger.warn('Pipedrive auto-match failed', { phone, error: err.message });
+                }
             }
 
             conversation = await createConversation({
