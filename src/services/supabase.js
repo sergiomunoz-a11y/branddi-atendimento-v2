@@ -185,7 +185,21 @@ export async function saveMessage(data) {
         .single();
     if (error) {
         if (error.message?.includes('duplicate') || error.code === '23505') {
-            return null; // duplicata — caller deve pular processamento
+            return null;
+        }
+        // Se a coluna não existe, tenta novamente sem os campos opcionais
+        if (error.code === '42703' || error.message?.includes('does not exist')) {
+            const { sent_by_user_id, sent_by_name, ...safeData } = data;
+            const retry = await supabase
+                .from('messages')
+                .upsert([safeData], { onConflict: 'unipile_message_id', ignoreDuplicates: true })
+                .select()
+                .single();
+            if (retry.error) {
+                if (retry.error.message?.includes('duplicate') || retry.error.code === '23505') return null;
+                throw retry.error;
+            }
+            return retry.data;
         }
         throw error;
     }

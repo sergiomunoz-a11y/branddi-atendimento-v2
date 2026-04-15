@@ -15,11 +15,23 @@ router.post('/auth/login', async (req, res) => {
         return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
     }
 
-    const { data: user, error } = await supabase
+    let { data: user, error } = await supabase
         .from('platform_users')
         .select('id, email, name, role, password_hash, pipedrive_user_id, avatar_url, active, permissions')
         .eq('email', email.toLowerCase().trim())
         .single();
+
+    // Fallback if permissions column doesn't exist yet
+    if (error?.code === '42703') {
+        const retry = await supabase
+            .from('platform_users')
+            .select('id, email, name, role, password_hash, pipedrive_user_id, avatar_url, active')
+            .eq('email', email.toLowerCase().trim())
+            .single();
+        user = retry.data;
+        error = retry.error;
+        if (user) user.permissions = {};
+    }
 
     if (error || !user) {
         return res.status(401).json({ error: 'E-mail ou senha incorretos.' });

@@ -16,10 +16,20 @@ const VALID_ROLES = ['SDR', 'Closer', 'Admin'];
 
 // ─── GET /api/users — lista todos os usuários ─────────────────────────
 router.get('/users', ...adminOnly, async (req, res) => {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
         .from('platform_users')
         .select('id, email, name, role, pipedrive_user_id, avatar_url, active, permissions, created_at')
         .order('created_at', { ascending: true });
+
+    // Fallback if permissions column doesn't exist yet
+    if (error?.code === '42703') {
+        const retry = await supabase
+            .from('platform_users')
+            .select('id, email, name, role, pipedrive_user_id, avatar_url, active, created_at')
+            .order('created_at', { ascending: true });
+        data = (retry.data || []).map(u => ({ ...u, permissions: {} }));
+        error = retry.error;
+    }
 
     if (error) return res.status(500).json({ error: error.message });
     res.json({ users: data });
