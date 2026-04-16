@@ -32,6 +32,7 @@ import {
 import { findFAQAnswer } from './chatbot-faq.js';
 import { trackBotEvent } from './chatbot-workers.js';
 import { getBotMessage, getMaxRetries, getBrand } from './business-config.js';
+import { isLLMBotAvailable, processLLMBotMessage } from './llm-bot.js';
 import logger from './logger.js';
 
 // ─── FLOW MESSAGES (loaded from config/business.yaml, with fallbacks) ─
@@ -127,7 +128,15 @@ export async function processChatbotMessage(conversation, text, chatId, attachme
             await _enrichLeadFromEntities(conversation, entities, answers);
         }
 
-        // ── Stage-specific processing ──
+        // ── LLM Bot (se disponível, usa IA em vez do state machine) ──
+        if (isLLMBotAvailable() && stage !== 'human' && stage !== 'classified') {
+            const llmResult = await processLLMBotMessage(conversation, text, chatId, attachments);
+            if (llmResult) return; // LLM processou com sucesso
+            // Se retornou null, fallback para state machine abaixo
+            logger.info('LLM bot fallback to state machine', { conversation_id: conversation.id });
+        }
+
+        // ── Stage-specific processing (fallback se LLM não disponível) ──
         switch (stage) {
             case 'welcome':
                 await _handleWelcome(conversation, text, chatId, answers);
