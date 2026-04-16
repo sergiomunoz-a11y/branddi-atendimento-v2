@@ -1,27 +1,33 @@
 /**
- * LLM Bot — Agente inteligente de qualificação com Gemini
- *
- * Substitui o state machine rígido por um agente LLM que:
- * - Entende linguagem natural (qualquer formato de resposta)
- * - Extrai entidades (empresa, domínio, intenção) conversacionalmente
- * - Detecta pedidos de falar com humano e escala imediatamente
- * - Mantém tom profissional e acolhedor da Branddi
- * - Coleta as mesmas informações do bot anterior, mas de forma fluida
+ * LLM Bot — Agente inteligente de qualificação
+ * Suporta: NVIDIA NIM (Llama) > Anthropic (Claude) > Gemini Flash > fallback state machine
  */
 import { updateConversation, updateLead, createRoutingEvent } from './supabase.js';
 import { sendMessage } from './unipile.js';
 import { saveMessage } from './supabase.js';
-import { isBusinessHours, calculatePriority, generateHandoffSummary } from './chatbot-nlp.js';
+import { isBusinessHours, calculatePriority } from './chatbot-nlp.js';
 import { trackBotEvent } from './chatbot-workers.js';
 import logger from './logger.js';
 import supabase from './supabase.js';
 
+// ─── Config ─────────────────────────────────────────────────────────
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
+const NVIDIA_MODEL = process.env.NVIDIA_MODEL || 'meta/llama-3.3-70b-instruct';
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-20250414';
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+// Provider priority: nvidia > anthropic > gemini > none
+const LLM_PROVIDER = NVIDIA_API_KEY ? 'nvidia'
+    : ANTHROPIC_API_KEY ? 'anthropic'
+    : GEMINI_API_KEY ? 'gemini'
+    : null;
 
 export function isLLMBotAvailable() {
-    return !!GEMINI_API_KEY;
+    return !!LLM_PROVIDER;
 }
 
 // ─── System Prompt ──────────────────────────────────────────────────
@@ -83,20 +89,16 @@ Ações:
 
 export async function processLLMBotMessage(conversation, text, chatId, attachments = []) {
     try {
-        // Anti-flood simples
         const answers = conversation.chatbot_answers || {};
         const msgCount = answers._llm_msg_count || 0;
 
         if (msgCount >= 8) {
-            // Limite de segurança — escala
             await _escalate(conversation, answers, chatId, 'Limite de mensagens atingido');
-            return;
+            return true;
         }
 
-        // Busca histórico de mensagens para contexto
+        // Busca histórico + contexto
         const history = await _getConversationHistory(conversation.id);
-
-        // Monta contexto do lead
         const lead = conversation.leads || {};
         const leadContext = [
             lead.name ? `Nome: ${lead.name}` : null,
@@ -105,13 +107,11 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
             lead.email ? `Email: ${lead.email}` : null,
         ].filter(Boolean).join('\n');
 
-        // Horário comercial
         const hours = isBusinessHours();
         const hoursNote = hours.active
             ? ''
             : '\n[NOTA: Fora do horário comercial. Informe que a mensagem foi registrada e o time responderá no próximo dia útil.]';
 
-        // Dados já extraídos
         const knownData = [
             answers.intent ? `Intenção já identificada: ${answers.intent}` : null,
             answers.company_name ? `Empresa já informada: ${answers.company_name}` : null,
@@ -119,16 +119,15 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
             answers.context ? `Contexto já coletado: ${answers.context}` : null,
         ].filter(Boolean).join('\n');
 
-        // Chama Gemini
         const userPrompt = `${leadContext ? `Dados do lead:\n${leadContext}\n\n` : ''}${knownData ? `Informações já coletadas:\n${knownData}\n\n` : ''}${hoursNote}Mensagem ${msgCount + 1} do lead. Histórico da conversa:\n${history}\n\nNova mensagem do lead: "${text}"`;
 
-        const llmResponse = await _callGemini(userPrompt);
+        // Chama LLM (Anthropic ou Gemini)
+        const llmResponse = await _callLLM(userPrompt);
         if (!llmResponse) {
-            logger.warn('LLM bot: sem resposta, fallback');
-            return null; // sinaliza para usar bot antigo
+            logger.warn('LLM bot: sem resposta, fallback', { provider: LLM_PROVIDER });
+            return null;
         }
 
-        // Parse resposta
         const parsed = _parseLLMResponse(llmResponse);
         if (!parsed) {
             logger.warn('LLM bot: resposta inválida', { raw: llmResponse.substring(0, 200) });
@@ -144,39 +143,98 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
         }
         answers._llm_msg_count = msgCount + 1;
         answers._llm_last_reason = parsed.reason;
+        answers._llm_provider = LLM_PROVIDER;
 
-        // Executa ação
         switch (parsed.action) {
             case 'escalate':
                 await _sendBotMsg(chatId, conversation.id, parsed.message);
                 await _escalate(conversation, answers, chatId, parsed.reason);
                 break;
-
             case 'classify':
                 await _sendBotMsg(chatId, conversation.id, parsed.message);
                 await _classify(conversation, answers, parsed.classification || 'comercial', chatId);
                 break;
-
             case 'continue':
             default:
                 await _sendBotMsg(chatId, conversation.id, parsed.message);
-                await updateConversation(conversation.id, {
-                    chatbot_answers: answers,
-                });
+                await updateConversation(conversation.id, { chatbot_answers: answers });
                 break;
         }
 
-        return true; // processado com sucesso
+        return true;
     } catch (err) {
         logger.error('LLM bot error', { error: err.message, conversation_id: conversation.id });
-        return null; // fallback para bot antigo
+        return null;
     }
 }
 
-// ─── Gemini API ─────────────────────────────────────────────────────
+// ─── LLM API Calls ─────────────────────────────────────────────────
+
+async function _callLLM(userMessage) {
+    if (LLM_PROVIDER === 'nvidia') return _callNvidia(userMessage);
+    if (LLM_PROVIDER === 'anthropic') return _callAnthropic(userMessage);
+    if (LLM_PROVIDER === 'gemini') return _callGemini(userMessage);
+    return null;
+}
+
+async function _callNvidia(userMessage) {
+    const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${NVIDIA_API_KEY}`,
+        },
+        body: JSON.stringify({
+            model: NVIDIA_MODEL,
+            max_tokens: 500,
+            temperature: 0.3,
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: userMessage },
+            ],
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.text();
+        logger.error('NVIDIA NIM API error', { status: res.status, error: err.substring(0, 300) });
+        return null;
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+}
+
+async function _callAnthropic(userMessage) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+            model: ANTHROPIC_MODEL,
+            max_tokens: 500,
+            temperature: 0.3,
+            system: SYSTEM_PROMPT,
+            messages: [{ role: 'user', content: userMessage }],
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.text();
+        logger.error('Anthropic API error', { status: res.status, error: err.substring(0, 300) });
+        return null;
+    }
+
+    const data = await res.json();
+    return data.content?.[0]?.text || null;
+}
 
 async function _callGemini(userMessage) {
-    const res = await fetch(GEMINI_URL, {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -204,16 +262,12 @@ async function _callGemini(userMessage) {
 
 function _parseLLMResponse(raw) {
     try {
-        // Limpa possíveis backticks
         const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const parsed = JSON.parse(cleaned);
-
         if (!parsed.message || !parsed.action) return null;
         if (!['continue', 'classify', 'escalate'].includes(parsed.action)) parsed.action = 'continue';
-
         return parsed;
     } catch {
-        // Tenta extrair JSON de dentro do texto
         const match = raw.match(/\{[\s\S]*\}/);
         if (match) {
             try {
@@ -262,11 +316,10 @@ async function _classify(conversation, answers, classification, chatId) {
         conversation_id: conversation.id,
         from_team: null,
         to_team: team,
-        reason: `LLM classification: ${classification} | ${answers._llm_last_reason || ''}`,
+        reason: `LLM classification (${LLM_PROVIDER}): ${classification} | ${answers._llm_last_reason || ''}`,
         routed_by: 'bot',
     });
 
-    // Atualiza lead com dados coletados
     if (conversation.lead_id) {
         const leadUpdates = {};
         if (answers.company_name) leadUpdates.company_name = answers.company_name;
@@ -290,18 +343,15 @@ async function _classify(conversation, answers, classification, chatId) {
     });
 
     await trackBotEvent(conversation.id, 'classified', {
-        classification: team,
-        priority,
-        company: answers.company_name,
-        domain: answers.domain,
-        method: 'llm',
+        classification: team, priority,
+        company: answers.company_name, domain: answers.domain,
+        method: `llm_${LLM_PROVIDER}`,
     });
 
     logger.info('LLM bot classificou lead', {
         conversation_id: conversation.id,
-        classification: team,
-        company: answers.company_name,
-        msgs: answers._llm_msg_count,
+        classification: team, company: answers.company_name,
+        msgs: answers._llm_msg_count, provider: LLM_PROVIDER,
     });
 }
 
@@ -313,7 +363,7 @@ async function _escalate(conversation, answers, chatId, reason) {
         conversation_id: conversation.id,
         from_team: null,
         to_team: team,
-        reason: `LLM escalation: ${reason}`,
+        reason: `LLM escalation (${LLM_PROVIDER}): ${reason}`,
         routed_by: 'bot',
     });
 
@@ -331,14 +381,12 @@ async function _escalate(conversation, answers, chatId, reason) {
     });
 
     await trackBotEvent(conversation.id, 'escalated', {
-        reason,
-        stage: 'llm',
-        msgs: answers._llm_msg_count,
+        reason, stage: 'llm',
+        msgs: answers._llm_msg_count, provider: LLM_PROVIDER,
     });
 
     logger.info('LLM bot escalou para humano', {
         conversation_id: conversation.id,
-        reason,
-        msgs: answers._llm_msg_count,
+        reason, msgs: answers._llm_msg_count, provider: LLM_PROVIDER,
     });
 }
