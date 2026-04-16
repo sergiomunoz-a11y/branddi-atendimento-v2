@@ -187,14 +187,31 @@ async function processChat(chat) {
                 }
             }
 
+            // Verifica quem iniciou a conversa: busca msgs para determinar
+            // Se a primeira msg é outbound (nós iniciamos) → sem bot
+            // Se é inbound (lead iniciou) → bot ativo apenas se veio do site (form)
+            const initMsgs = await getMessages(chat.id, { limit: 5 });
+            const initItems = initMsgs.items || [];
+            // Ordena por timestamp (mais antiga primeiro)
+            initItems.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const firstMsg = initItems[0];
+            const weStarted = firstMsg ? firstMsg.is_sender : false;
+
+            // Bot só ativa para leads do site (origin=form). Contatos diretos ou outbound → humano
+            const botStage = (!weStarted && lead.origin === 'form') ? 'welcome' : 'human';
+
             conversation = await createConversation({
                 lead_id:          lead.id,
                 whatsapp_chat_id: chat.id,
                 channel:          'whatsapp_direct',
-                status:           'waiting',
-                chatbot_stage:    'welcome',
+                status:           weStarted ? 'in_progress' : 'waiting',
+                chatbot_stage:    botStage,
                 last_message_at:  new Date().toISOString(),
             });
+
+            if (botStage === 'human') {
+                logger.info('Bot desativado para conversa', { phone, reason: weStarted ? 'outbound' : 'direct_contact', origin: lead.origin });
+            }
         }
 
         // Busca mensagens: conversa nova → importa histórico recente; existente → só desde último poll
