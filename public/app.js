@@ -737,10 +737,9 @@ async function sendMsg() {
             if (text) fd.append('text', text);
             if (chatId) fd.append('chatId', chatId);
 
-            const token = localStorage.getItem('token');
             const response = await fetch(`/api/messages/${currentConversation.id}/send-media`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
+                headers: { 'Authorization': `Bearer ${getToken()}` },
                 body: fd,
             });
             if (!response.ok) {
