@@ -586,13 +586,68 @@ function renderMessage(msg) {
         sender = msg.sent_by_name || msg.sender_name || 'Equipe';
     }
 
+    // Renderiza attachments (imagens, vídeos, documentos)
+    let attachmentsHtml = '';
+    const atts = msg.attachments || [];
+    for (const att of atts) {
+        const uri = att.uri || att.url || '';
+        const mime = (att.mime_type || att.type || '').toLowerCase();
+        const name = att.name || att.filename || 'arquivo';
+
+        // Monta URL do proxy
+        let proxyUrl = '';
+        if (uri.startsWith('att://')) {
+            const path = uri.replace('att://', '').split('/').slice(1).join('/');
+            proxyUrl = `/api/attachments/${path}`;
+        } else if (uri.startsWith('http')) {
+            proxyUrl = uri;
+        }
+
+        if (!proxyUrl) continue;
+
+        if (mime.startsWith('image/')) {
+            attachmentsHtml += `<div class="msg-attachment msg-image">
+                <img src="${proxyUrl}" alt="${escHtml(name)}" loading="lazy" onclick="window.open(this.src,'_blank')">
+            </div>`;
+        } else if (mime.startsWith('video/')) {
+            attachmentsHtml += `<div class="msg-attachment msg-video">
+                <video src="${proxyUrl}" controls preload="metadata" style="max-width:100%;border-radius:8px;"></video>
+            </div>`;
+        } else if (mime.startsWith('audio/') || mime === 'audio/ogg; codecs=opus') {
+            attachmentsHtml += `<div class="msg-attachment msg-audio">
+                <audio src="${proxyUrl}" controls preload="metadata" style="width:100%;"></audio>
+            </div>`;
+        } else {
+            attachmentsHtml += `<div class="msg-attachment msg-file">
+                <a href="${proxyUrl}" target="_blank" rel="noopener" class="file-link">📎 ${escHtml(name)}</a>
+            </div>`;
+        }
+    }
+
+    // Conteúdo de texto com links clicáveis
+    const textContent = msg.content ? linkify(escHtml(msg.content)) : (atts.length ? '' : '(mídia)');
+
     return `<div class="msg-bubble ${cls}">
-        <div class="msg-text">${escHtml(msg.content || '(midia)')}</div>
+        ${attachmentsHtml}
+        ${textContent ? `<div class="msg-text">${textContent}</div>` : ''}
         <div class="msg-meta">
             ${sender ? `<span class="msg-sender${isBot ? ' bot-label' : ''}">${escHtml(sender)}</span>` : ''}
             <span class="msg-time">${time}</span>
         </div>
     </div>`;
+}
+
+function linkify(text) {
+    // Converte URLs em links clicáveis (já recebe HTML escaped)
+    return text.replace(
+        /https?:\/\/[^\s&lt;&quot;]+/g,
+        url => {
+            // Desescapa para obter a URL real
+            const realUrl = url.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+            const display = realUrl.length > 50 ? realUrl.substring(0, 47) + '...' : realUrl;
+            return `<a href="${realUrl}" target="_blank" rel="noopener" class="msg-link">${display}</a>`;
+        }
+    );
 }
 
 async function sendMsg() {

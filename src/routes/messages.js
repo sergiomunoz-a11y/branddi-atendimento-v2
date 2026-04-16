@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import { getMessages, saveMessage, markMessagesRead, updateConversation, getLeadById } from '../services/supabase.js';
-import { sendMessage, startNewChat } from '../services/unipile.js';
+import { sendMessage, startNewChat, getAttachmentUrl, isAvailable as unipileAvailable } from '../services/unipile.js';
 import { applyScriptVariables } from '../services/chatbot-engine.js';
 import { onOutboundMessage } from '../services/auto-activities.js';
 import supabase from '../services/supabase.js';
@@ -156,6 +156,33 @@ router.post('/messages/:conversationId/script', async (req, res) => {
         onOutboundMessage(req.params.conversationId, req.user?.id).catch(() => {});
 
         res.json({ success: true, message: msg, applied_text: text });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/attachments/:attachmentId — Proxy para mídia do Unipile ─
+router.get('/attachments/*', async (req, res) => {
+    try {
+        if (!unipileAvailable()) return res.status(503).json({ error: 'Unipile não configurado' });
+
+        // Reconstrói o path do attachment: tudo depois de /attachments/
+        const attPath = req.params[0];
+        if (!attPath) return res.status(400).json({ error: 'Attachment path obrigatório' });
+
+        const url = getAttachmentUrl(`att://_/${attPath}`);
+        if (!url) return res.status(404).json({ error: 'URL não encontrada' });
+
+        const upstream = await fetch(url);
+        if (!upstream.ok) return res.status(upstream.status).json({ error: 'Falha ao buscar attachment' });
+
+        // Repassa content-type e corpo
+        const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'private, max-age=86400'); // cache 24h
+
+        const buffer = await upstream.arrayBuffer();
+        res.send(Buffer.from(buffer));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
