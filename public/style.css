@@ -492,10 +492,10 @@ a.nav-btn { text-decoration: none; }
     border: 1px solid rgba(139,92,246,.15);
     align-self: flex-start;
 }
-.msg-text { font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.msg-text { font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--text-primary); }
 .msg-meta { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
-.msg-time { font-size: 10px; color: var(--text-muted); }
-.msg-sender { font-size: 10px; color: var(--text-muted); font-weight: 600; }
+.msg-time { font-size: 10px; color: rgba(255,255,255,.45); }
+.msg-sender { font-size: 10px; color: var(--accent); font-weight: 600; }
 .msg-sender.bot-label { color: #a78bfa; }
 
 /* Attachments (imagens, vídeos, áudios, arquivos) */

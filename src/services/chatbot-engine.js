@@ -132,8 +132,14 @@ export async function processChatbotMessage(conversation, text, chatId, attachme
         if (isLLMBotAvailable() && stage !== 'human' && stage !== 'classified') {
             const llmResult = await processLLMBotMessage(conversation, text, chatId, attachments);
             if (llmResult) return; // LLM processou com sucesso
-            // Se retornou null, fallback para state machine abaixo
-            logger.info('LLM bot fallback to state machine', { conversation_id: conversation.id });
+            // LLM falhou — envia resposta genérica simples em vez do state machine completo
+            // (evita mensagem de horário comercial, menu 1/2/3, etc.)
+            logger.warn('LLM bot failed, sending generic fallback', { conversation_id: conversation.id, stage });
+            await sendBotMsg(chatId, conversation.id, 'Olá! Como posso te ajudar hoje?');
+            if (stage === 'welcome') {
+                await updateConversation(conversation.id, { chatbot_stage: 'qualifying', chatbot_answers: answers });
+            }
+            return;
         }
 
         // ── Stage-specific processing (fallback se LLM não disponível) ──
@@ -494,8 +500,10 @@ async function _finalizeClassification(conversation, answers, classification, ch
         status:          'in_progress',
     });
 
-    // Envia mensagem de classificação
-    await sendBotMsg(chatId, conversation.id, FLOW.classified.message(classification));
+    // Envia mensagem de classificação (pula se LLM já classificou e enviou msg)
+    if (!answers._classified_by || answers._classified_by !== 'llm') {
+        await sendBotMsg(chatId, conversation.id, FLOW.classified.message(classification));
+    }
 
     // Gera e envia handoff summary (mensagem interna para o atendente)
     const summary = generateHandoffSummary(answers, conversation.leads, sentiment);
@@ -656,6 +664,11 @@ async function _saveInternalNote(conversationId, text) {
 
 export async function triggerWelcome(conversationId, chatId, leadName) {
     try {
+        // Se LLM está ativo, não envia welcome — LLM responderá na 1ª mensagem inbound
+        if (isLLMBotAvailable()) {
+            logger.info('triggerWelcome skipped (LLM active)', { conversation_id: conversationId });
+            return;
+        }
         const hours = isBusinessHours();
         let msg;
         if (!hours.active) {

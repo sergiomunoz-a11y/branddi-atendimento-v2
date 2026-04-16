@@ -105,7 +105,7 @@
                 </select>
 
                 <!-- Busca de conversas -->
-                <input type="search" class="sidebar-search" id="inbox-search" placeholder="Buscar conversa..." autocomplete="off" name="conv-filter" data-form-type="other" />
+                <input type="search" class="sidebar-search" id="inbox-search" placeholder="Buscar conversa..." autocomplete="nope" name="conv-filter" data-form-type="other" />
             </div>
             <div class="conversation-list" id="conversation-list">
                 <div class="skeleton-conv-item"><div class="skeleton-conv-row"><div class="skeleton skeleton-circle"></div><div style="flex:1"><div class="skeleton skeleton-line" style="width:60%"></div><div class="skeleton skeleton-line-sm" style="width:40%"></div></div></div></div>
@@ -267,7 +267,7 @@
     <div class="panel-header">
         <h2 class="panel-title">Leads</h2>
         <div class="panel-actions">
-            <input type="text" class="search-input" id="leads-search" placeholder="🔍 Buscar por nome, empresa ou telefone..." />
+            <input type="text" class="search-input" id="leads-search" placeholder="🔍 Buscar por nome, empresa ou telefone..." autocomplete="nope" />
             <select class="filter-select" id="leads-filter-origin">
                 <option value="">Todas as origens</option>
                 <option value="form">Formulario</option>
@@ -396,7 +396,7 @@
     <div class="panel-header">
         <h2 class="panel-title">🕓 Historico de Conversas</h2>
         <div class="panel-actions">
-            <input type="text" class="search-input" id="history-search" placeholder="🔍 Buscar nome ou empresa..." />
+            <input type="text" class="search-input" id="history-search" placeholder="🔍 Buscar nome ou empresa..." autocomplete="nope" />
             <select class="filter-select" id="history-filter-status">
                 <option value="">Todos os status</option>
                 <option value="closed">Encerradas</option>
