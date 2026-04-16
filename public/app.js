@@ -582,7 +582,24 @@ async function loadMessages(convId, chatId) {
             return;
         }
 
-        wrap.innerHTML = msgs.map(renderMessage).join('');
+        // Deduplica: se bot e atendente enviaram msg com mesmo conteúdo (polling salva duplicata),
+        // mantém apenas a versão bot para evitar bolha duplicada
+        const deduped = [];
+        const botContents = new Set();
+        for (const m of msgs) {
+            if (m.sender_type === 'bot' && m.content) {
+                botContents.add(m.content.trim());
+            }
+        }
+        for (const m of msgs) {
+            // Pula mensagem outbound/human que é duplicata de uma mensagem bot
+            if (m.sender_type !== 'bot' && m.direction === 'outbound' && m.content && botContents.has(m.content.trim())) {
+                continue;
+            }
+            deduped.push(m);
+        }
+
+        wrap.innerHTML = deduped.map(renderMessage).join('');
         wrap.scrollTop = wrap.scrollHeight;
     } catch (err) {
         console.error('Messages error:', err);
