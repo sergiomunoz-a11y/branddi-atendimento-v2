@@ -43,6 +43,9 @@ const corsOrigin = process.env.NODE_ENV === 'production'
     ? (process.env.FRONTEND_URL || (() => { throw new Error('FRONTEND_URL required in production'); })())
     : (process.env.FRONTEND_URL || '*');
 
+// ─── Trust proxy (Railway, Render, etc.) ─────────────────────────────
+app.set('trust proxy', 1);
+
 // ─── Middleware ───────────────────────────────────────────────────────
 app.use(compression());
 app.use(cors({ origin: corsOrigin }));
