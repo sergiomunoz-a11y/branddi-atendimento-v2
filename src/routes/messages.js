@@ -161,13 +161,12 @@ router.post('/messages/:conversationId/script', async (req, res) => {
     }
 });
 
-// ─── GET /api/attachments/:path+ — Proxy para mídia do Unipile ────────
-router.get('/attachments/:path+', async (req, res) => {
+// ─── GET /api/attachments/:messageId/:index — Proxy para mídia do Unipile
+router.get('/attachments/:messageId/:index', async (req, res) => {
     try {
         if (!unipileAvailable()) return res.status(503).json({ error: 'Unipile não configurado' });
 
-        // Reconstrói o path do attachment: tudo depois de /attachments/
-        const attPath = req.params.path;
+        const attPath = `${req.params.messageId}/${req.params.index}`;
         if (!attPath) return res.status(400).json({ error: 'Attachment path obrigatório' });
 
         const url = getAttachmentUrl(`att://_/${attPath}`);
