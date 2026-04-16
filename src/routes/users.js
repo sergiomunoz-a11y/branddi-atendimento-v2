@@ -129,9 +129,8 @@ router.delete('/users/:id', ...adminOnly, async (req, res) => {
 // Útil para o admin vincular um platform_user ao seu pipedrive_user_id
 router.get('/users/pipedrive-users', ...adminOnly, async (req, res) => {
     try {
-        const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
-        const r = await fetch(`${base}/users?api_token=${process.env.PIPEDRIVE_API_TOKEN}`);
-        const data = await r.json();
+        const { pdGet } = await import('../services/pipedrive.js');
+        const data = await pdGet('/users');
         const users = (data.data || [])
             .filter(u => u.active_flag)
             .map(u => ({ id: u.id, name: u.name, email: u.email }));

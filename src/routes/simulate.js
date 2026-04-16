@@ -11,10 +11,10 @@
 import { Router } from 'express';
 import {
     classifyIntent, extractEntities, isPureGreeting,
-    analyzeSentiment, validateDomain, isMediaOnly,
+    analyzeSentiment, validateDomain,
     isBusinessHours, generateHandoffSummary, calculatePriority
 } from '../services/chatbot-nlp.js';
-import { findFAQAnswer, matchFAQ } from '../services/chatbot-faq.js';
+import { findFAQAnswer } from '../services/chatbot-faq.js';
 import logger from '../services/logger.js';
 
 const router = Router();

@@ -242,10 +242,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 // --- Polling ---
+let _pollingInProgress = false;
+
 function startPolling() {
-    pollTimer = setInterval(() => {
-        loadInbox(true); // silent = true (nao reseta selecao)
-        if (currentConversation) loadMessages(currentConversation.id, currentConversation.whatsapp_chat_id);
+    pollTimer = setInterval(async () => {
+        if (_pollingInProgress) return; // Evita race condition de polls sobrepostos
+        _pollingInProgress = true;
+        try {
+            await loadInbox(true); // silent = true (nao reseta selecao)
+            if (currentConversation) await loadMessages(currentConversation.id, currentConversation.whatsapp_chat_id);
+        } finally {
+            _pollingInProgress = false;
+        }
     }, 7000);
 }
 
@@ -458,8 +466,6 @@ function renderConversationList() {
         const time = conv.last_message ? relativeTime(conv.last_message.created_at) : relativeTime(conv.created_at);
         const isActive = currentConversation?.id === conv.id;
         const hasUnread = (conv.unread_count || 0) > 0;
-        const convType = conv.type || 'inbound';
-        const typeLabel = convType === 'prospecting' ? '🚀 Prospeccao' : '📥 Inbound';
 
         return `<div class="conv-item${isActive ? ' active' : ''}${hasUnread ? ' unread' : ''}" data-id="${conv.id}" data-action="select-conversation">
             <div class="conv-item-top">
@@ -785,8 +791,6 @@ async function sendMsg() {
     }
 }
 
-function sendMessage() { return sendMsg(); }
-
 function handleInputKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -870,8 +874,6 @@ function renderLeadPanel(conv) {
     const lead = conv.leads || {};
     const name = lead.name || formatPhone(lead.phone) || 'Desconhecido';
     const initial = name.charAt(0).toUpperCase();
-    const convType = conv.type || 'inbound';
-    const typeLabel = convType === 'prospecting' ? '🚀 Prospeccao' : '📥 Inbound';
 
     // Mostra o content, esconde o empty
     const emptyEl = document.getElementById('lead-panel-empty');
@@ -1409,10 +1411,6 @@ async function loadLeads() {
     }
 }
 
-async function syncLead(leadId) {
-    await syncLeadToPipedrive(leadId, document.getElementById(`pd-btn-${leadId}`));
-}
-
 // Setup filtros de leads
 function setupLeadFilters() {
     const setupLeadFilter = id => {
@@ -1696,26 +1694,6 @@ function setupScriptForm() {
     });
 }
 
-function openScriptEditor() {
-    document.getElementById('modal-script-title').textContent = 'Novo Script';
-    document.getElementById('script-id').value = '';
-    document.getElementById('form-script')?.reset();
-    const pub = document.getElementById('script-is-public');
-    if (pub) pub.checked = true;
-    const label = document.getElementById('script-visibility-label');
-    if (label) label.textContent = 'Público — visível para toda a equipe';
-    openModal('modal-script');
-}
-
-function closeScriptEditor() {
-    closeModal('modal-script');
-}
-
-function saveScript() {
-    // Trigger the form submit event
-    document.getElementById('form-script')?.requestSubmit();
-}
-
 function editScript(scriptId) {
     const s = allScripts.find(x => x.id === scriptId);
     if (!s) return;
@@ -1935,11 +1913,6 @@ function closeWaConnect() {
     closeModal('modal-wa-connect');
     checkHealth();
 }
-
-// Aliases for window exports
-function openWhatsAppModal() { openWaConnect(); }
-function closeWhatsAppModal() { closeWaConnect(); }
-function connectWhatsApp() { generateWaQR(); }
 
 async function generateWaQR() {
     const btn = document.getElementById('btn-wa-generate-qr');
@@ -2224,13 +2197,13 @@ function openEditUserForm(user) {
     if (tokenEl) {
         tokenEl.value = '';
         tokenEl.placeholder = user.pipedrive_api_token
-            ? `Token salvo (${user.pipedrive_api_token})`
+            ? 'Token salvo ••••••. Deixe vazio para manter.'
             : 'Cole o token aqui (Pipedrive > Config > Preferencias > API)';
     }
     const tokenStatus = document.getElementById('uf-token-status');
     if (tokenStatus) {
         tokenStatus.textContent = user.pipedrive_api_token
-            ? `✅ Token configurado (${user.pipedrive_api_token}). Deixe vazio para manter.`
+            ? '✅ Token configurado. Deixe vazio para manter.'
             : 'Necessario para que atividades aparecam como criadas por este usuario no Pipedrive';
         tokenStatus.style.color = user.pipedrive_api_token ? 'var(--accent)' : 'var(--text-muted)';
     }
@@ -2467,24 +2440,6 @@ async function syncLeadToPipedrive(leadId, btnEl) {
     }
 }
 
-// Stub CRM sync functions for onclick compatibility
-function syncCRM() { toast('Sync CRM iniciado...', 'info'); }
-function syncAllToday() { toast('Sync All Today iniciado...', 'info'); }
-
-// --- Conversation actions (aliases) ---
-function loadConversation(convId) { return selectConversation(convId); }
-function claimConversation(convId) {
-    if (!convId) return;
-    apiFetch(`/api/inbox/${convId}/claim`, { method: 'POST' })
-        .then(() => { toast('Conversa reivindicada', 'success'); loadInbox(); })
-        .catch(err => toast(`Erro: ${err.message}`, 'error'));
-}
-function releaseConversation(convId) {
-    if (!convId) return;
-    apiFetch(`/api/inbox/${convId}/release`, { method: 'POST' })
-        .then(() => { toast('Conversa liberada', 'success'); loadInbox(); })
-        .catch(err => toast(`Erro: ${err.message}`, 'error'));
-}
 
 // --- HISTORY ---
 
@@ -2562,9 +2517,9 @@ async function openHistoryMessages(convId, leadName) {
                 const cls  = msg.direction === 'inbound' ? 'inbound' : msg.sender_type === 'bot' ? 'bot' : 'outbound';
                 const sender = msg.sender_type === 'bot' ? '🤖 Bot' : msg.direction === 'inbound' ? '👤 Lead' : '👩 Atendente';
                 return `<div class="msg-bubble ${cls}" style="max-width:85%">
-                    <div class="msg-text">${msg.content || ''}</div>
+                    <div class="msg-text">${escHtml(msg.content || '')}</div>
                     <div class="msg-meta">
-                        <span class="msg-sender ${cls === 'bot' ? 'bot-label' : ''}">${sender}</span>
+                        <span class="msg-sender ${cls === 'bot' ? 'bot-label' : ''}">${escHtml(sender)}</span>
                         <span class="msg-time">${date} ${time}</span>
                     </div>
                 </div>`;
@@ -2574,15 +2529,8 @@ async function openHistoryMessages(convId, leadName) {
         }
 
     } catch (err) {
-        if (body) body.innerHTML = `<div class="loading-row" style="color:var(--red)">Erro: ${err.message}</div>`;
+        if (body) body.innerHTML = `<div class="loading-row" style="color:var(--red)">Erro: ${escHtml(err.message)}</div>`;
     }
-}
-
-function showConversationMessages(convId) {
-    return openHistoryMessages(convId, 'Conversa');
-}
-function closeHistoryModal() {
-    closeModal('modal-history-msgs');
 }
 
 // Setup history filters
@@ -2794,35 +2742,23 @@ window.switchSettingsTab = switchSettingsTab;
 // Inbox / Chat
 window.selectConversation = selectConversation;
 window.sendMsg            = sendMsg;
-window.sendMessage        = sendMessage;
 window.handleInputKey     = handleInputKey;
 window.toggleScriptsMenu  = toggleScriptsMenu;
 window.applyScript        = applyScript;
 window.setInboxFilter     = setInboxFilter;
 window.setInboxType       = setInboxType;
-window.loadConversation   = loadConversation;
-window.claimConversation  = claimConversation;
-window.releaseConversation = releaseConversation;
 
 // Routing
 window.routeConv = routeConv;
 window.closeConv = closeConv;
 
 // Leads
-window.syncLead            = syncLead;
 window.syncLeadToPipedrive = syncLeadToPipedrive;
 window.exportLeadsCSV      = exportLeadsCSV;
-
-// CRM sync stubs
-window.syncCRM       = syncCRM;
-window.syncAllToday  = syncAllToday;
 
 // Scripts
 window.editScript        = editScript;
 window.deleteScript      = deleteScript;
-window.openScriptEditor  = openScriptEditor;
-window.closeScriptEditor = closeScriptEditor;
-window.saveScript        = saveScript;
 
 // Modals
 window.openModal  = openModal;
@@ -2848,14 +2784,9 @@ window.openWaConnect      = openWaConnect;
 window.closeWaConnect     = closeWaConnect;
 window.generateWaQR       = generateWaQR;
 window.disconnectWa       = disconnectWa;
-window.openWhatsAppModal  = openWhatsAppModal;
-window.closeWhatsAppModal = closeWhatsAppModal;
-window.connectWhatsApp    = connectWhatsApp;
 
 // History
 window.openHistoryMessages      = openHistoryMessages;
-window.showConversationMessages = showConversationMessages;
-window.closeHistoryModal        = closeHistoryModal;
 
 // Dashboard
 window.loadDashboard = loadDashboard;

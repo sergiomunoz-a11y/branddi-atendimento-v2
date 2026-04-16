@@ -25,13 +25,13 @@ import {
 } from './supabase.js';
 import { sendMessage } from './unipile.js';
 import {
-    classifyIntent, extractEntities, isGreeting, isPureGreeting,
+    classifyIntent, extractEntities, isPureGreeting,
     analyzeSentiment, validateDomain, isMediaOnly, getMediaType,
     isFlood, isBusinessHours, generateHandoffSummary, calculatePriority
 } from './chatbot-nlp.js';
 import { findFAQAnswer } from './chatbot-faq.js';
 import { trackBotEvent } from './chatbot-workers.js';
-import { getBotMessage, getMaxRetries, getBrand } from './business-config.js';
+import { getBotMessage, getMaxRetries } from './business-config.js';
 import { isLLMBotAvailable, processLLMBotMessage } from './llm-bot.js';
 import logger from './logger.js';
 

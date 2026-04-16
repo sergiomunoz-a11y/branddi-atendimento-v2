@@ -7,8 +7,8 @@ import {
     createLead, createConversation, findLeadByPhone, normalizePhone
 } from '../services/supabase.js';
 import { startNewChat } from '../services/unipile.js';
-import { triggerWelcome } from '../services/chatbot-engine.js';
 import { queueLeadSync } from '../services/crm-sync.js';
+import logger from '../services/logger.js';
 
 const router = Router();
 
@@ -44,9 +44,9 @@ router.post('/webhook/form', async (req, res) => {
 
         if (!lead) {
             lead = await createLead({ name, phone, email, company_name: company, origin: 'form', origin_metadata });
-            console.log(`  [webhook] Novo lead via formulário: ${name} | ${phone || email}`);
+            logger.info('Novo lead via formulário', { name, contact: phone || email });
         } else {
-            console.log(`  [webhook] Lead existente encontrado: ${lead.name} | ${lead.phone}`);
+            logger.info('Lead existente encontrado', { name: lead.name, phone: lead.phone });
         }
 
         // Cria conversa no banco (sem chatId ainda — será vinculado quando o lead responder)
@@ -90,7 +90,7 @@ router.post('/webhook/form', async (req, res) => {
                     chatStarted = true;
                 }
             } catch (err) {
-                console.warn(`  [webhook] Não foi possível iniciar chat WA: ${err.message}`);
+                logger.warn('Webhook: não foi possível iniciar chat WA', { error: err.message });
             }
         }
 
@@ -104,14 +104,14 @@ router.post('/webhook/form', async (req, res) => {
             whatsapp_started: chatStarted,
         });
     } catch (err) {
-        console.error(`  [webhook] Form error: ${err.message}`);
+        logger.error('Webhook form error', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
 
 // ─── Webhook genérico (para testes / integrações futuras) ─────────────
 router.post('/webhook/test', (req, res) => {
-    console.log('  [webhook] Test received:', JSON.stringify(req.body, null, 2));
+    logger.info('Webhook test received', { body: req.body });
     res.json({ received: true, body: req.body });
 });
 
