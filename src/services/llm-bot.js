@@ -120,7 +120,7 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
         const hours = isBusinessHours();
         const hoursNote = hours.active
             ? ''
-            : '\n[NOTA: Fora do horário comercial. Informe que a mensagem foi registrada e o time responderá no próximo dia útil.]';
+            : '\n[NOTA: Fora do horário comercial. Mencione brevemente que o atendimento humano retorna no próximo dia útil, MAS continue qualificando normalmente — faça perguntas, colete informações, seja útil. NÃO pare no aviso de horário.]';
 
         const knownData = [
             answers.intent ? `Intenção já identificada: ${answers.intent}` : null,
