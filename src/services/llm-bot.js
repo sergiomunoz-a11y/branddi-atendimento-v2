@@ -145,20 +145,26 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
         answers._llm_last_reason = parsed.reason;
         answers._llm_provider = LLM_PROVIDER;
 
-        switch (parsed.action) {
-            case 'escalate':
-                await _sendBotMsg(chatId, conversation.id, parsed.message);
-                await _escalate(conversation, answers, chatId, parsed.reason);
-                break;
-            case 'classify':
-                await _sendBotMsg(chatId, conversation.id, parsed.message);
-                await _classify(conversation, answers, parsed.classification || 'comercial', chatId);
-                break;
-            case 'continue':
-            default:
-                await _sendBotMsg(chatId, conversation.id, parsed.message);
-                await updateConversation(conversation.id, { chatbot_answers: answers });
-                break;
+        // Envia mensagem PRIMEIRO — após isso, sempre retorna true
+        // (evita que o state machine mande msg duplicada se _classify/_escalate falhar)
+        await _sendBotMsg(chatId, conversation.id, parsed.message);
+
+        try {
+            switch (parsed.action) {
+                case 'escalate':
+                    await _escalate(conversation, answers, chatId, parsed.reason);
+                    break;
+                case 'classify':
+                    await _classify(conversation, answers, parsed.classification || 'comercial', chatId);
+                    break;
+                case 'continue':
+                default:
+                    await updateConversation(conversation.id, { chatbot_answers: answers });
+                    break;
+            }
+        } catch (actionErr) {
+            logger.error('LLM bot action error', { error: actionErr.message, action: parsed.action, conversation_id: conversation.id });
+            // Ainda retorna true — a mensagem já foi enviada ao lead
         }
 
         return true;
@@ -323,7 +329,6 @@ async function _classify(conversation, answers, classification, chatId) {
     if (conversation.lead_id) {
         const leadUpdates = {};
         if (answers.company_name) leadUpdates.company_name = answers.company_name;
-        if (answers.domain) leadUpdates.metadata = { domain: answers.domain, context: answers.context };
         if (answers.intent) leadUpdates.classification = classification;
         if (Object.keys(leadUpdates).length > 0) {
             await updateLead(conversation.lead_id, leadUpdates);
