@@ -82,9 +82,13 @@ export async function getMessages(chatId, { limit = 50, cursor } = {}) {
     return req(`/chats/${chatId}/messages${qs}`);
 }
 
-export async function sendMessage(chatId, text) {
+export async function sendMessage(chatId, text, attachmentBuffer, attachmentName) {
     const fd = new FormData();
-    fd.append('text', text);
+    if (text) fd.append('text', text);
+    if (attachmentBuffer && attachmentName) {
+        const blob = new Blob([attachmentBuffer]);
+        fd.append('attachments', blob, attachmentName);
+    }
     return req(`/chats/${chatId}/messages`, { method: 'POST', body: fd });
 }
 

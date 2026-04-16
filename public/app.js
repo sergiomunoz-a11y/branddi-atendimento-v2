@@ -145,6 +145,12 @@ function setupEventDelegation() {
             case 'save-note':
                 saveInternalNote();
                 break;
+            case 'attach-file':
+                document.getElementById('file-input')?.click();
+                break;
+            case 'remove-attachment':
+                removeAttachment();
+                break;
             case 'open-deal-contacts':
                 openDealContacts(el.dataset.dealId);
                 break;
@@ -524,10 +530,20 @@ function renderChatArea(conv) {
                     <div class="scripts-menu" id="scripts-menu"></div>
                 </div>
             </div>
+            <div class="chat-attach-preview" id="attach-preview" style="display:none">
+                <div class="attach-preview-content" id="attach-preview-content"></div>
+                <button class="attach-remove-btn" data-action="remove-attachment" title="Remover">✕</button>
+            </div>
             <div class="chat-input-row">
+                <button class="attach-btn" data-action="attach-file" title="Anexar arquivo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                </button>
                 <textarea class="chat-textarea" id="chat-input" placeholder="Digite sua mensagem..." rows="1"
                     onkeydown="handleInputKey(event)"></textarea>
                 <button class="send-btn" data-action="send-msg">▶</button>
+                <input type="file" id="file-input" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none">
             </div>
         </div>
         <div class="chat-notes-area" id="chat-tab-notes">
@@ -540,6 +556,7 @@ function renderChatArea(conv) {
 
     loadScriptsForMenu();
     autoResizeTextarea(document.getElementById('chat-input'));
+    setupFileAttachment();
 }
 
 let _lastMessagesHash = '';
@@ -650,10 +667,60 @@ function linkify(text) {
     );
 }
 
+// --- File Attachment ---
+let _pendingFile = null;
+
+function setupFileAttachment() {
+    const fileInput = document.getElementById('file-input');
+    if (!fileInput) return;
+
+    fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        if (file.size > 16 * 1024 * 1024) {
+            toast('Arquivo muito grande (máx 16MB)', 'error');
+            fileInput.value = '';
+            return;
+        }
+        _pendingFile = file;
+        showAttachPreview(file);
+    });
+}
+
+function showAttachPreview(file) {
+    const preview = document.getElementById('attach-preview');
+    const content = document.getElementById('attach-preview-content');
+    if (!preview || !content) return;
+
+    const mime = file.type || '';
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+
+    if (mime.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        content.innerHTML = `<img src="${url}" class="attach-thumb"><span class="attach-name">${escHtml(file.name)} (${sizeMB}MB)</span>`;
+    } else if (mime.startsWith('video/')) {
+        content.innerHTML = `<span class="attach-icon">🎬</span><span class="attach-name">${escHtml(file.name)} (${sizeMB}MB)</span>`;
+    } else if (mime.startsWith('audio/')) {
+        content.innerHTML = `<span class="attach-icon">🎵</span><span class="attach-name">${escHtml(file.name)} (${sizeMB}MB)</span>`;
+    } else {
+        content.innerHTML = `<span class="attach-icon">📎</span><span class="attach-name">${escHtml(file.name)} (${sizeMB}MB)</span>`;
+    }
+    preview.style.display = 'flex';
+}
+
+function removeAttachment() {
+    _pendingFile = null;
+    const preview = document.getElementById('attach-preview');
+    const fileInput = document.getElementById('file-input');
+    if (preview) preview.style.display = 'none';
+    if (fileInput) fileInput.value = '';
+}
+
 async function sendMsg() {
     const input = document.getElementById('chat-input');
     const text  = (input?.value || '').trim();
-    if (!text || !currentConversation) return;
+    if (!text && !_pendingFile) return;
+    if (!currentConversation) return;
 
     const chatId = currentConversation.whatsapp_chat_id || null;
 
@@ -661,9 +728,33 @@ async function sendMsg() {
     input.style.height = '';
 
     try {
-        const res = await apiFetch(`/api/messages/${currentConversation.id}/send`, {
-            method: 'POST', body: JSON.stringify({ text, chatId }),
-        });
+        let res;
+
+        if (_pendingFile) {
+            // Envia com mídia via FormData
+            const fd = new FormData();
+            fd.append('file', _pendingFile);
+            if (text) fd.append('text', text);
+            if (chatId) fd.append('chatId', chatId);
+
+            const token = localStorage.getItem('token');
+            const response = await fetch(`/api/messages/${currentConversation.id}/send-media`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: fd,
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Erro ao enviar mídia');
+            }
+            res = await response.json();
+            removeAttachment();
+        } else {
+            // Envio de texto normal
+            res = await apiFetch(`/api/messages/${currentConversation.id}/send`, {
+                method: 'POST', body: JSON.stringify({ text, chatId }),
+            });
+        }
 
         // Se o chat foi iniciado agora, atualiza o chatId na conversa local
         if (res.chat_started && !currentConversation.whatsapp_chat_id) {

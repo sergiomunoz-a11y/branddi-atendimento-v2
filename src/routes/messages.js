@@ -2,6 +2,7 @@
  * Messages Routes — Envio/recebimento e histórico de mensagens
  */
 import { Router } from 'express';
+import multer from 'multer';
 import { getMessages, saveMessage, markMessagesRead, updateConversation, getLeadById } from '../services/supabase.js';
 import { sendMessage, startNewChat, getAttachmentUrl, isAvailable as unipileAvailable } from '../services/unipile.js';
 import { applyScriptVariables } from '../services/chatbot-engine.js';
@@ -9,6 +10,7 @@ import { onOutboundMessage } from '../services/auto-activities.js';
 import supabase from '../services/supabase.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } }); // 16MB max
 
 // ─── GET /api/messages/:conversationId — Histórico ────────────────────
 router.get('/messages/:conversationId', async (req, res) => {
@@ -156,6 +158,62 @@ router.post('/messages/:conversationId/script', async (req, res) => {
         onOutboundMessage(req.params.conversationId, req.user?.id).catch(() => {});
 
         res.json({ success: true, message: msg, applied_text: text });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/messages/:conversationId/send-media — Envia mensagem com mídia
+router.post('/messages/:conversationId/send-media', upload.single('file'), async (req, res) => {
+    try {
+        const text = req.body.text || '';
+        let chatId = req.body.chatId || null;
+        const file = req.file;
+
+        if (!file && !text) return res.status(400).json({ error: 'Texto ou arquivo é obrigatório' });
+        if (!chatId) {
+            // Resolve chatId da conversa
+            const { data: conv } = await supabase
+                .from('conversations')
+                .select('whatsapp_chat_id')
+                .eq('id', req.params.conversationId)
+                .single();
+            chatId = conv?.whatsapp_chat_id;
+        }
+        if (!chatId) return res.status(400).json({ error: 'Conversa sem chat WhatsApp vinculado' });
+
+        // Envia via Unipile com attachment
+        await sendMessage(chatId, text || null, file?.buffer, file?.originalname);
+
+        // Monta metadados do attachment para salvar no banco
+        const attachments = file ? [{
+            name: file.originalname,
+            mime_type: file.mimetype,
+            size: file.size,
+        }] : [];
+
+        const msg = await saveMessage({
+            conversation_id:    req.params.conversationId,
+            direction:          'outbound',
+            sender_type:        'human',
+            sender_name:        req.user?.name || 'Atendente',
+            sent_by_user_id:    req.user?.id || null,
+            sent_by_name:       req.user?.name || null,
+            content:            text || (file ? `📎 ${file.originalname}` : ''),
+            attachments,
+            unipile_message_id: `media_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        });
+
+        await updateConversation(req.params.conversationId, {
+            chatbot_stage: 'human',
+            status: 'in_progress',
+            last_message_at: new Date().toISOString(),
+            assigned_user_id: req.user?.id || null,
+        });
+
+        onOutboundMessage(req.params.conversationId, req.user?.id).catch(() => {});
+
+        res.json({ success: true, message: msg });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

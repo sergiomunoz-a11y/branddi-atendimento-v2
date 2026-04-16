@@ -508,6 +508,33 @@ a.nav-btn { text-decoration: none; }
 .msg-link { color: #60a5fa; text-decoration: underline; word-break: break-all; }
 .msg-link:hover { color: #93bbfd; }
 
+/* Attach button & preview */
+.attach-btn {
+    width: 40px; height: 40px; border-radius: var(--radius-md); border: none;
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: color .15s, background .15s;
+}
+.attach-btn:hover { color: var(--accent); background: rgba(0,214,178,.08); }
+
+.chat-attach-preview {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; margin-bottom: 8px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+.attach-preview-content { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.attach-thumb { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+.attach-icon { font-size: 24px; flex-shrink: 0; }
+.attach-name { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attach-remove-btn {
+    width: 28px; height: 28px; border-radius: 50%; border: none;
+    background: rgba(239,68,68,.15); color: #ef4444; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    font-size: 14px; font-weight: 600; transition: background .15s;
+}
+.attach-remove-btn:hover { background: rgba(239,68,68,.3); }
+
 /* System messages (roteamento, etc.) */
 .msg-system {
     text-align: center;
