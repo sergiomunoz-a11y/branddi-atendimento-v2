@@ -897,15 +897,16 @@ function renderLeadPanel(conv) {
     // Badge de tipo — clicável para Admin (alterna inbound/prospecting)
     const typeBadge = document.getElementById('lp-type-badge');
     if (typeBadge) {
-        const labels = { inbound: 'Inbound', prospecting: 'Prospeccao' };
-        typeBadge.textContent = labels[convType] || convType;
-        typeBadge.className = `conv-type-badge ${convType}`;
+        const typeLabels = { inbound: 'Inbound', prospecting: 'Prospeccao' };
+        const cType = conv.type || 'inbound';
+        typeBadge.textContent = typeLabels[cType] || cType;
+        typeBadge.className = `conv-type-badge ${cType}`;
 
         if (currentUser?.role === 'Admin') {
             typeBadge.classList.add('clickable');
             typeBadge.title = 'Clique para alterar tipo';
             typeBadge.onclick = async () => {
-                const newType = convType === 'inbound' ? 'prospecting' : 'inbound';
+                const newType = cType === 'inbound' ? 'prospecting' : 'inbound';
                 await apiFetch(`/api/inbox/${conv.id}/type`, {
                     method: 'PATCH',
                     body: JSON.stringify({ type: newType }),
@@ -913,7 +914,7 @@ function renderLeadPanel(conv) {
                 conv.type = newType;
                 renderLeadPanel(conv);
                 loadInbox();
-                toast(`Tipo alterado para ${labels[newType]}`, 'success');
+                toast(`Tipo alterado para ${typeLabels[newType]}`, 'success');
             };
         } else {
             typeBadge.classList.remove('clickable');
