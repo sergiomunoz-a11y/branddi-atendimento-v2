@@ -157,9 +157,61 @@ function setupEventDelegation() {
             case 'close-deal-contacts':
                 closeDealContactsModal();
                 break;
+            case 'toggle-filter-menu':
+                toggleFilterMenu();
+                break;
+            case 'toggle-lp-details':
+                el.closest('.lp-collapsible')?.classList.toggle('open');
+                break;
+            case 'route-dropdown':
+                toggleRouteDropdown();
+                break;
+            case 'route-action': {
+                const team = el.dataset.team;
+                const cid = el.dataset.id;
+                if (team === 'close') closeConv(cid);
+                else routeConv(cid, team);
+                closeRouteDropdown();
+                break;
+            }
         }
     });
 }
+
+// --- Filter Dropdown ---
+function toggleFilterMenu() {
+    const menu = document.getElementById('filter-dropdown-menu');
+    menu?.classList.toggle('open');
+}
+// Close filter menu when clicking outside
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('filter-dropdown');
+    const menu = document.getElementById('filter-dropdown-menu');
+    if (menu?.classList.contains('open') && dd && !dd.contains(e.target)) {
+        menu.classList.remove('open');
+    }
+});
+function updateFilterDot() {
+    const dot = document.getElementById('filter-active-dot');
+    const hasFilter = currentTypeFilter !== 'all' || currentFilter !== 'all';
+    if (dot) dot.classList.toggle('show', hasFilter);
+}
+
+// --- Route Dropdown in Chat Header ---
+function toggleRouteDropdown() {
+    const menu = document.querySelector('.route-dropdown-menu');
+    menu?.classList.toggle('open');
+}
+function closeRouteDropdown() {
+    document.querySelector('.route-dropdown-menu')?.classList.remove('open');
+}
+document.addEventListener('click', (e) => {
+    const dd = document.querySelector('.route-dropdown');
+    const menu = document.querySelector('.route-dropdown-menu');
+    if (menu?.classList.contains('open') && dd && !dd.contains(e.target)) {
+        menu.classList.remove('open');
+    }
+});
 
 // --- Chat Tab Switching ---
 function switchChatTab(tab) {
@@ -316,18 +368,19 @@ function setupInboxFilters() {
             chip.classList.add('active');
             currentFilter = chip.dataset.filter;
             renderConversationList();
+            updateFilterDot();
         });
     });
 
     // Filtro por usuário (Admin only)
     const userFilterEl = document.getElementById('inbox-user-filter');
+    const userGroup = document.getElementById('filter-user-group');
     if (userFilterEl && currentUser?.role === 'Admin') {
-        userFilterEl.style.display = '';
+        if (userGroup) userGroup.style.display = '';
         userFilterEl.addEventListener('change', () => loadInbox());
-        // Popula lista de usuários
         apiFetch('/api/users').then(data => {
             const users = data.users || [];
-            userFilterEl.innerHTML = '<option value="">Todos os usuários</option>' +
+            userFilterEl.innerHTML = '<option value="">Todos os usuarios</option>' +
                 users.map(u => `<option value="${u.id}">${escHtml(u.name)} (${u.role})</option>`).join('');
         }).catch(() => {});
     }
@@ -339,6 +392,7 @@ function setupInboxFilters() {
             tab.classList.add('active');
             currentTypeFilter = tab.dataset.type;
             loadInbox();
+            updateFilterDot();
         });
     });
 
@@ -517,9 +571,23 @@ function renderChatArea(conv) {
                 </div>
             </div>
             <div class="chat-header-actions">
-                <button class="btn-sm" data-action="route-conv" data-id="${conv.id}" data-team="comercial">→ Comercial</button>
-                <button class="btn-sm" data-action="route-conv" data-id="${conv.id}" data-team="opec">→ OPEC</button>
-                <button class="btn-sm" data-action="close-conv" data-id="${conv.id}">✕ Fechar</button>
+                <div class="route-dropdown">
+                    <button class="btn-sm btn-route-trigger" data-action="route-dropdown">
+                        <svg class="icon icon-sm"><use href="/icons.svg#icon-share"></use></svg> Atribuir
+                    </button>
+                    <div class="route-dropdown-menu">
+                        <button class="route-dropdown-item" data-action="route-action" data-id="${conv.id}" data-team="comercial">
+                            <span class="route-dot" style="background:var(--accent)"></span> Comercial
+                        </button>
+                        <button class="route-dropdown-item" data-action="route-action" data-id="${conv.id}" data-team="opec">
+                            <span class="route-dot" style="background:var(--amber)"></span> OPEC
+                        </button>
+                        <div class="route-dropdown-divider"></div>
+                        <button class="route-dropdown-item route-close" data-action="route-action" data-id="${conv.id}" data-team="close">
+                            <svg class="icon icon-sm"><use href="/icons.svg#icon-x"></use></svg> Fechar conversa
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="messages-wrap" id="messages-wrap">
