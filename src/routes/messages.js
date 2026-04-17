@@ -58,6 +58,7 @@ router.post('/messages/:conversationId/send', async (req, res) => {
                     }
 
                     // Primeira msg já foi enviada pelo startNewChat, salvar e retornar
+                    const startMsgId = chatResult?.message_id || `human_${Date.now()}_${Math.random().toString(36).slice(2)}`;
                     const msg = await saveMessage({
                         conversation_id:   req.params.conversationId,
                         direction:         'outbound',
@@ -67,7 +68,7 @@ router.post('/messages/:conversationId/send', async (req, res) => {
                         sent_by_name:      req.user?.name || null,
                         content:           text,
                         attachments:       [],
-                        unipile_message_id: `human_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                        unipile_message_id: startMsgId,
                     });
                     await updateConversation(req.params.conversationId, {
                         chatbot_stage: 'human', status: 'in_progress',
@@ -82,8 +83,9 @@ router.post('/messages/:conversationId/send', async (req, res) => {
             if (!chatId) return res.status(400).json({ error: 'Sem chatId e sem telefone para iniciar conversa' });
         }
 
-        // Envia via Unipile
-        await sendMessage(chatId, text);
+        // Envia via Unipile e captura ID real para deduplicação
+        const sendResult = await sendMessage(chatId, text);
+        const realMsgId = sendResult?.message_id || sendResult?.id || `human_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
         // Salva no banco com rastreio do remetente
         const msg = await saveMessage({
@@ -95,7 +97,7 @@ router.post('/messages/:conversationId/send', async (req, res) => {
             sent_by_name:      req.user?.name || null,
             content:           text,
             attachments:       [],
-            unipile_message_id: `human_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            unipile_message_id: realMsgId,
         });
 
         // Garante que a conversa está em modo humano + auto-atribui ao usuário
@@ -182,8 +184,9 @@ router.post('/messages/:conversationId/send-media', upload.single('file'), async
         }
         if (!chatId) return res.status(400).json({ error: 'Conversa sem chat WhatsApp vinculado' });
 
-        // Envia via Unipile com attachment
-        await sendMessage(chatId, text || null, file?.buffer, file?.originalname);
+        // Envia via Unipile com attachment e captura ID real
+        const mediaResult = await sendMessage(chatId, text || null, file?.buffer, file?.originalname);
+        const mediaMsgId = mediaResult?.message_id || mediaResult?.id || `media_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
         // Monta metadados do attachment para salvar no banco
         const attachments = file ? [{
@@ -201,7 +204,7 @@ router.post('/messages/:conversationId/send-media', upload.single('file'), async
             sent_by_name:       req.user?.name || null,
             content:            text || (file ? `📎 ${file.originalname}` : ''),
             attachments,
-            unipile_message_id: `media_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            unipile_message_id: mediaMsgId,
         });
 
         await updateConversation(req.params.conversationId, {
