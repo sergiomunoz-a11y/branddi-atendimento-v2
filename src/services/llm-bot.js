@@ -348,15 +348,20 @@ async function _getConversationHistory(conversationId) {
 
 async function _sendBotMsg(chatId, conversationId, text) {
     if (!text) return;
-    await sendMessage(chatId, text);
-    await saveMessage({
-        conversation_id: conversationId,
-        direction: 'outbound',
-        sender_type: 'bot',
-        sender_name: 'Bot Branddi',
-        content: text,
-        unipile_message_id: `llm_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    });
+    try {
+        const result = await sendMessage(chatId, text);
+        const realMsgId = result?.message_id || result?.id || `llm_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        await saveMessage({
+            conversation_id: conversationId,
+            direction: 'outbound',
+            sender_type: 'bot',
+            sender_name: 'Bot Branddi',
+            content: text,
+            unipile_message_id: realMsgId,
+        });
+    } catch (err) {
+        logger.error('LLM bot: erro enviando msg', { error: err.message, conversationId });
+    }
 }
 
 async function _classify(conversation, answers, classification, chatId) {

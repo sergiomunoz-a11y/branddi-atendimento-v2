@@ -8,6 +8,7 @@ import {
     findLeadByPhone, createLead, updateLead, saveMessage, normalizePhone
 } from './supabase.js';
 import { processChatbotMessage } from './chatbot-engine.js';
+import { isLLMBotAvailable } from './llm-bot.js';
 import { onInboundMessage } from './auto-activities.js';
 import { findPersonByPhone, getDealsForPerson } from './pipedrive.js';
 import whatsapp from '../providers/index.js';
@@ -197,8 +198,11 @@ async function processChat(chat) {
             const firstMsg = initItems[0];
             const weStarted = firstMsg ? firstMsg.is_sender : false;
 
-            // Bot só ativa para leads do site (origin=form). Contatos diretos ou outbound → humano
-            const botStage = (!weStarted && lead.origin === 'form') ? 'welcome' : 'human';
+            // Se LLM disponível, ativa bot para TODOS os inbound (inclusive contatos diretos)
+            // Sem LLM: só ativa para leads do site (origin=form)
+            const botStage = weStarted ? 'human'
+                : isLLMBotAvailable() ? 'qualifying'
+                : (lead.origin === 'form' ? 'welcome' : 'human');
 
             conversation = await createConversation({
                 lead_id:          lead.id,
@@ -241,8 +245,9 @@ async function processChat(chat) {
             // v2: Se saveMessage retorna null, mensagem é duplicata — pula processamento
             if (!saved) continue;
 
-            // v2: Reset bot_away_sent quando nova msg inbound chega em conversa humana
-            if (msg.direction === 'inbound' && conversation.chatbot_stage === 'human') {
+            // v2: Reset bot_away_sent SOMENTE quando um humano respondeu (outbound humano)
+            // Isso evita o loop: inbound → reset → away → inbound → reset → away...
+            if (msg.direction === 'outbound' && saved.sender_type === 'human' && conversation.bot_away_sent) {
                 await updateConversation(conversation.id, { bot_away_sent: false });
             }
 

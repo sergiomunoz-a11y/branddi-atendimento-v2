@@ -132,13 +132,21 @@ export async function processChatbotMessage(conversation, text, chatId, attachme
         if (isLLMBotAvailable() && stage !== 'human' && stage !== 'classified') {
             const llmResult = await processLLMBotMessage(conversation, text, chatId, attachments);
             if (llmResult) return; // LLM processou com sucesso
-            // LLM falhou — envia resposta genérica simples em vez do state machine completo
-            // (evita mensagem de horário comercial, menu 1/2/3, etc.)
-            logger.warn('LLM bot failed, sending generic fallback', { conversation_id: conversation.id, stage });
-            await sendBotMsg(chatId, conversation.id, 'Olá! Como posso te ajudar hoje?');
-            if (stage === 'welcome') {
-                await updateConversation(conversation.id, { chatbot_stage: 'qualifying', chatbot_answers: answers });
-            }
+            // LLM falhou — contingência: qualifica com perguntas diretas em vez de IA
+            logger.warn('LLM bot failed, using qualification fallback', { conversation_id: conversation.id, stage });
+            const leadName = conversation.leads?.name?.split(' ')[0] || '';
+            const fallbackMsg =
+                `Olá${leadName ? `, ${leadName}` : ''}! 👋 Obrigado por entrar em contato com a *Branddi*.\n\n` +
+                `Para direcionar você ao time certo, me conta:\n\n` +
+                `1️⃣  Quero conhecer os serviços da Branddi\n` +
+                `2️⃣  Recebi uma notificação da Branddi\n` +
+                `3️⃣  Sou cliente e tenho uma dúvida`;
+            await sendBotMsg(chatId, conversation.id, fallbackMsg);
+            // Volta ao state machine clássico para processar a resposta
+            await updateConversation(conversation.id, {
+                chatbot_stage: 'qualifying',
+                chatbot_answers: { ...answers, _llm_fallback: true },
+            });
             return;
         }
 
@@ -627,7 +635,9 @@ function _buildRoutingReason(answers, sentiment) {
 
 async function sendBotMsg(chatId, conversationId, text) {
     try {
-        await sendMessage(chatId, text);
+        const result = await sendMessage(chatId, text);
+        // Usa o message_id REAL retornado pela Unipile para dedup correto no polling
+        const realMsgId = result?.message_id || result?.id || `bot_${Date.now()}_${Math.random().toString(36).slice(2)}`;
         const { saveMessage } = await import('./supabase.js');
         await saveMessage({
             conversation_id:    conversationId,
@@ -636,7 +646,7 @@ async function sendBotMsg(chatId, conversationId, text) {
             sender_name:        'Bot Branddi',
             content:            text,
             attachments:        [],
-            unipile_message_id: `bot_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            unipile_message_id: realMsgId,
         });
     } catch (err) {
         logger.error('Erro enviando mensagem bot', { error: err.message });
