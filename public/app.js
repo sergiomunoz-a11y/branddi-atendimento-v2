@@ -223,22 +223,24 @@ function switchChatTab(tab) {
 }
 
 // --- Internal Notes (localStorage) ---
-function saveInternalNote() {
+async function saveInternalNote() {
     if (!currentConversation) return;
     const input = document.getElementById('chat-notes-input');
     const text = (input?.value || '').trim();
     if (!text) return;
-    const key = `ba_notes_${currentConversation.id}`;
-    const notes = JSON.parse(localStorage.getItem(key) || '[]');
-    notes.push({ text, date: new Date().toISOString(), user: currentUser?.name || 'Admin' });
-    localStorage.setItem(key, JSON.stringify(notes));
-    input.value = '';
-    toast('Anotacao salva', 'success');
-    renderConvEvents();
-}
-
-function getInternalNotes(convId) {
-    return JSON.parse(localStorage.getItem(`ba_notes_${convId}`) || '[]');
+    try {
+        await apiFetch(`/api/messages/${currentConversation.id}/note`, {
+            method: 'POST',
+            body: JSON.stringify({ text }),
+        });
+        input.value = '';
+        toast('Anotacao salva', 'success');
+        _lastMessagesHash = '';
+        await loadMessages(currentConversation.id);
+        switchChatTab('message');
+    } catch (err) {
+        toast(`Erro: ${err.message}`, 'error');
+    }
 }
 
 // --- Init ---
@@ -682,13 +684,16 @@ async function loadMessages(convId, chatId) {
 
 function renderMessage(msg) {
     const isBot    = msg.sender_type === 'bot';
+    const isNote   = msg.sender_type === 'note';
     const isOut    = msg.direction === 'outbound';
-    const cls      = isBot ? 'bot' : (isOut ? 'outbound' : 'inbound');
+    const cls      = isNote ? 'note' : isBot ? 'bot' : (isOut ? 'outbound' : 'inbound');
     const time     = formatTime(msg.created_at);
 
-    // Nome do remetente: bot, nome do usuário que enviou, ou nada para lead
+    // Nome do remetente
     let sender = '';
-    if (isBot) {
+    if (isNote) {
+        sender = msg.sent_by_name || msg.sender_name || 'Nota interna';
+    } else if (isBot) {
         sender = '🤖 Bot';
     } else if (isOut) {
         sender = msg.sent_by_name || msg.sender_name || 'Equipe';
@@ -1145,9 +1150,6 @@ function renderConvEvents() {
     if (conv.created_at) events.push({ text: 'Conversa criada', time: conv.created_at });
     // Routed
     if (conv.assigned_to) events.push({ text: `Atribuida a ${conv.assigned_to}`, time: conv.updated_at || conv.created_at });
-    // Internal notes
-    const notes = getInternalNotes(conv.id);
-    notes.forEach(n => events.push({ text: `Nota: ${n.text.substring(0, 40)}${n.text.length > 40 ? '...' : ''}`, time: n.date }));
 
     events.sort((a, b) => new Date(b.time) - new Date(a.time));
 

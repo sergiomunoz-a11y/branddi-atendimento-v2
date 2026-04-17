@@ -222,6 +222,30 @@ router.post('/messages/:conversationId/send-media', upload.single('file'), async
     }
 });
 
+// ─── POST /api/messages/:conversationId/note — Salva anotação interna ────
+router.post('/messages/:conversationId/note', async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text?.trim()) return res.status(400).json({ error: 'text é obrigatório' });
+
+        const msg = await saveMessage({
+            conversation_id:    req.params.conversationId,
+            direction:          'outbound',
+            sender_type:        'note',
+            sender_name:        req.user?.name || 'Nota',
+            sent_by_user_id:    req.user?.id || null,
+            sent_by_name:       req.user?.name || null,
+            content:            text.trim(),
+            attachments:        [],
+            unipile_message_id: `note_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        });
+
+        res.json({ success: true, message: msg });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── GET /api/attachments/:messageId/:index — Proxy para mídia do Unipile
 router.get('/attachments/:messageId/:index', async (req, res) => {
     try {

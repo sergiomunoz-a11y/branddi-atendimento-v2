@@ -539,6 +539,15 @@ a.nav-btn { text-decoration: none; }
     border: 1px solid rgba(139,92,246,.15);
     align-self: flex-start;
 }
+.msg-bubble.note {
+    background: rgba(245,158,11,.08);
+    border: 1px dashed rgba(245,158,11,.3);
+    align-self: center;
+    max-width: 85%;
+    font-style: italic;
+}
+.msg-bubble.note .msg-sender { color: var(--amber); }
+.msg-bubble.note .msg-text { color: var(--text-secondary); }
 .msg-text { font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--text-primary); }
 .msg-meta { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
 .msg-time { font-size: 10px; color: rgba(255,255,255,.45); }
