@@ -764,6 +764,16 @@ body {
 /* Estado default: painel visível com 330px */
 .inbox-layout { grid-template-columns: 290px 1fr 330px; }
 
+/* Quando NAO ha conversa selecionada (chat em empty-state),
+   esconde automaticamente o lead-panel e o chat ocupa todo espaco.
+   Isso garante que o watermark fique visualmente centrado. */
+.inbox-layout:has(.chat-area > .empty-state-pro) {
+    grid-template-columns: 290px 1fr !important;
+}
+.inbox-layout:has(.chat-area > .empty-state-pro) .lead-panel {
+    display: none !important;
+}
+
 /* Lead panel — background distinto, borda forte à esquerda */
 .lead-panel {
     background: var(--bg-panel);
