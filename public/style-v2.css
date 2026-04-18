@@ -116,3 +116,190 @@ body {
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
 }
+
+/* ================================================================
+   SPRINT 2 — Nav lateral compacta 66px + tooltips
+   ================================================================ */
+.side-nav {
+    width: 66px;
+    background: var(--bg-nav);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border-strong);
+    padding: 14px 0;
+    align-items: center;
+    z-index: 100;
+}
+
+.side-nav-brand {
+    margin-bottom: 26px;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    color: var(--text-1);
+}
+.side-nav-brand svg { width: 30px; height: 30px; }
+
+.side-nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    width: 100%;
+    align-items: center;
+    padding: 0;
+}
+
+.side-nav-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    padding: 0 0 6px;
+    border-top: none;
+}
+
+/* Nav buttons — 44x44 icon-only, com tooltip via ::after */
+.nav-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    position: relative;
+    transition: all 0.2s var(--ease);
+    flex-shrink: 0;
+}
+.nav-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-1);
+}
+.nav-btn.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+
+/* Esconder label expandido, manter acessibilidade */
+.nav-btn .nav-label { display: none; }
+.nav-btn .nav-icon { width: auto; height: auto; font-size: 0; }
+.nav-btn .nav-icon .icon { width: 21px; height: 21px; }
+
+/* Badge — dot no canto superior direito */
+.nav-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 1px 5px;
+    background: var(--accent);
+    color: #0a1a28;
+    font-size: 9px;
+    font-weight: 800;
+    border-radius: 10px;
+    line-height: 14px;
+    text-align: center;
+    box-shadow: 0 0 6px var(--accent);
+    display: none;
+}
+.nav-badge.show { display: inline-block; }
+
+/* Tooltip via title (mantém semântica do HTML atual) */
+.nav-btn[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-md);
+    color: var(--text-1);
+    padding: 5px 11px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 300;
+    pointer-events: none;
+    animation: v2-fadeIn 0.12s ease both;
+}
+
+/* Status dot no bottom */
+.side-status {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: v2-glow 3s ease infinite;
+}
+.status-dot.offline {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    animation: v2-pulse 1s ease infinite;
+}
+
+/* Usuário logado — avatar compacto */
+.side-nav-user {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+}
+.side-nav-user .user-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #0090ff);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    letter-spacing: -0.02em;
+    margin-bottom: 2px;
+}
+.side-nav-user .user-role-dot { display: none; }
+.side-nav-user .btn-logout {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-3);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s var(--ease);
+}
+.side-nav-user .btn-logout:hover {
+    background: rgba(255, 92, 92, 0.1);
+    color: var(--red);
+}
+.side-nav-user .btn-logout .icon { width: 14px; height: 14px; }
+
+/* App layout — libera espaço horizontal */
+.app-layout {
+    left: 66px;
+    width: calc(100% - 66px);
+}
