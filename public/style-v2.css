@@ -1267,3 +1267,111 @@ body {
     border-radius: var(--radius) !important;
     border: 1px solid var(--border-md);
 }
+
+/* ================================================================
+   SPRINT 9 — QA, responsivo, polish final
+   ================================================================ */
+
+/* Selection harmonizado com accent */
+::selection { background: var(--accent-mid); color: var(--text-1); }
+
+/* Focus-visible global consistente */
+:focus-visible {
+    outline: 2px solid var(--accent-mid);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* ─── Tablet (≤1024px) ────────────────────────────────────── */
+@media (max-width: 1024px) {
+    .inbox-layout { grid-template-columns: 290px 1fr; }
+    .inbox-layout .lead-panel { display: none; }
+    .btn-toggle-lead-panel { display: none; }
+    .chat-area::after { width: 160px; height: 160px; }
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ─── Mobile (≤768px) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+    .side-nav { width: 56px; padding: 12px 0; }
+    .nav-btn { width: 40px; height: 40px; }
+    .nav-btn .nav-icon .icon { width: 19px; height: 19px; }
+    .side-nav-brand svg { width: 26px; height: 26px; }
+    .app-layout { left: 56px; width: calc(100% - 56px); }
+
+    /* Tooltips escondidos no mobile (touch) */
+    .nav-btn[title]:hover::after { display: none; }
+
+    .inbox-layout,
+    .inbox-layout.lead-panel-hidden { grid-template-columns: 1fr !important; }
+    .inbox-sidebar { background: var(--bg-convlist); }
+
+    .chat-area::after { width: 120px; height: 120px; opacity: 0.03; }
+    .messages-wrap { padding: 14px 12px; }
+    .msg-bubble { max-width: 82%; }
+    .chat-input-wrap { padding: 6px 10px 12px; }
+
+    .panel-header {
+        padding: 14px 16px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .panel-title { font-size: 16px; }
+    .panel-actions { flex-wrap: wrap; gap: 6px; width: 100%; }
+    .panel-actions .search-input,
+    .panel-actions .filter-select { width: 100%; min-width: 0; }
+
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 14px; }
+    .kpi-value { font-size: 22px; }
+    .charts-grid { grid-template-columns: 1fr; padding: 0 14px 14px; }
+    .scripts-grid { grid-template-columns: 1fr; padding: 14px; }
+    .leads-table-wrap { padding: 0 12px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .leads-table th, .leads-table td { padding: 8px 10px; }
+
+    .modal,
+    .modal-box {
+        max-width: 95vw !important;
+        max-height: 90vh;
+        margin: 8px;
+    }
+    .modal-body { padding: 16px; }
+    .modal-header { padding: 14px 16px; }
+
+    .deals-search-wrap { padding: 16px; }
+}
+
+/* ─── Small mobile (≤480px) ───────────────────────────────── */
+@media (max-width: 480px) {
+    .side-nav { display: none; }
+    .app-layout { left: 0; width: 100%; }
+    .kpi-grid { grid-template-columns: 1fr; }
+    .lp-contact-header { padding: 16px 14px 12px; }
+    .lp-contact-header .lp-avatar { width: 48px; height: 48px; font-size: 18px; }
+    .chat-avatar { width: 34px; height: 34px; font-size: 14px; }
+    .btn-toggle-lead-panel { display: none; }
+}
+
+/* ─── Reduce motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ─── Print (caso usuário imprima transcrição) ────────────── */
+@media print {
+    .side-nav, .lead-panel, .chat-input-wrap, .modal-overlay { display: none !important; }
+    .chat-area::before, .chat-area::after { display: none !important; }
+    body { background: #fff; color: #000; }
+    .msg-bubble { break-inside: avoid; border: 1px solid #ccc; }
+}
+
+/* ─── High DPI refinements ────────────────────────────────── */
+@media (min-resolution: 2dppx) {
+    .chat-area::before { background-size: 30px 30px; }
+}
