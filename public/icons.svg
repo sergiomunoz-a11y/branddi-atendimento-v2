@@ -180,9 +180,49 @@
     <polyline points="7 3 7 8 15 8"/>
   </symbol>
 
-  <!-- Pipedrive "P" -->
-  <symbol id="icon-pipedrive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 4v16"/>
-    <path d="M8 4h5a5 5 0 0 1 0 10H8"/>
+  <!-- Pipedrive "p" — sans-serif geométrica: stem vertical reto + bowl circular donut -->
+  <symbol id="icon-pipedrive" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <rect x="5" y="3" width="3.5" height="18" fill="currentColor" stroke="none"/>
+    <path fill="currentColor" fill-rule="evenodd" stroke="none" d="M12 3a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm0 3a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/>
+  </symbol>
+
+  <!-- Tag / Label -->
+  <symbol id="icon-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+    <line x1="7" y1="7" x2="7.01" y2="7"/>
+  </symbol>
+
+  <!-- Note / File-text -->
+  <symbol id="icon-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+  </symbol>
+
+  <!-- Filter -->
+  <symbol id="icon-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+  </symbol>
+
+  <!-- Chevron Right -->
+  <symbol id="icon-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </symbol>
+
+  <!-- Share / Route -->
+  <symbol id="icon-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="5" r="3"/>
+    <circle cx="6" cy="12" r="3"/>
+    <circle cx="18" cy="19" r="3"/>
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+  </symbol>
+
+  <!-- More vertical (3 dots) -->
+  <symbol id="icon-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="1"/>
+    <circle cx="12" cy="5" r="1"/>
+    <circle cx="12" cy="19" r="1"/>
   </symbol>
 </svg>

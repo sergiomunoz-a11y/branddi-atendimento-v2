@@ -4,7 +4,7 @@
  * v3: Suporte a scripts pessoais (is_public + owner_user_id)
  */
 import { Router } from 'express';
-import { getScripts, upsertScript } from '../services/supabase.js';
+import { upsertScript } from '../services/supabase.js';
 import supabase from '../services/supabase.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';

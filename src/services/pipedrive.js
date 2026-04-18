@@ -1,41 +1,102 @@
 /**
  * Pipedrive Service — Wrappers da API do Pipedrive
  * Versão simplificada focada em atendimento (Person + Org + Deal + Activity)
+ * v2.1: Circuit breaker, timeout, error handling robusto
  */
 import 'dotenv/config';
 import logger from './logger.js';
 
 const BASE  = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
 const TOKEN = process.env.PIPEDRIVE_API_TOKEN;
+const PD_TIMEOUT_MS = 10_000; // 10s timeout por request
+
+// ─── Circuit Breaker (leve) ──────────────────────────────────────────
+const _circuit = {
+    failures: 0,
+    openUntil: 0,          // timestamp em ms
+    THRESHOLD: 5,          // abre após 5 falhas consecutivas
+    COOLDOWN: 60_000,      // 60s aberto antes de tentar de novo
+};
+
+function circuitCheck() {
+    if (_circuit.failures < _circuit.THRESHOLD) return true; // closed
+    if (Date.now() > _circuit.openUntil) return true;        // half-open
+    return false;                                             // open
+}
+
+function circuitSuccess() {
+    _circuit.failures = 0;
+    _circuit.openUntil = 0;
+}
+
+function circuitFailure() {
+    _circuit.failures++;
+    if (_circuit.failures >= _circuit.THRESHOLD) {
+        _circuit.openUntil = Date.now() + _circuit.COOLDOWN;
+        logger.warn('Pipedrive circuit breaker OPEN', { failures: _circuit.failures, cooldown_s: _circuit.COOLDOWN / 1000 });
+    }
+}
+
+/** Status do circuit breaker (exposto para health check) */
+export function getPipedriveCircuitStatus() {
+    if (_circuit.failures < _circuit.THRESHOLD) return 'closed';
+    return Date.now() > _circuit.openUntil ? 'half-open' : 'open';
+}
 
 // ─── Core Wrappers ────────────────────────────────────────────────────
 
-// tokenOverride: permite usar token individual do user em vez do global
-export async function pdGet(endpoint, tokenOverride) {
+async function _pdFetch(endpoint, options = {}, tokenOverride) {
+    if (!circuitCheck()) {
+        throw new Error('Pipedrive indisponível (circuit breaker aberto). Tente novamente em breve.');
+    }
+
     const token = tokenOverride || TOKEN;
     const sep = endpoint.includes('?') ? '&' : '?';
-    const res = await fetch(`${BASE}${endpoint}${sep}api_token=${token}`);
-    return res.json();
+    const url = `${BASE}${endpoint}${sep}api_token=${token}`;
+
+    try {
+        const res = await fetch(url, {
+            ...options,
+            signal: AbortSignal.timeout(PD_TIMEOUT_MS),
+        });
+
+        if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            const errMsg = `Pipedrive ${options.method || 'GET'} ${endpoint} → ${res.status}`;
+            logger.warn(errMsg, { status: res.status, body: body.slice(0, 200) });
+            circuitFailure();
+            // Retorna formato Pipedrive padrão com success=false para compatibilidade
+            return { success: false, data: null, error: errMsg };
+        }
+
+        circuitSuccess();
+        return res.json();
+    } catch (err) {
+        circuitFailure();
+        logger.error(`Pipedrive fetch error: ${endpoint}`, { error: err.message });
+        return { success: false, data: null, error: err.message };
+    }
+}
+
+// tokenOverride: permite usar token individual do user em vez do global
+export async function pdGet(endpoint, tokenOverride) {
+    return _pdFetch(endpoint, {}, tokenOverride);
 }
 
 export async function pdPost(endpoint, data, tokenOverride) {
-    const token = tokenOverride || TOKEN;
-    const res = await fetch(`${BASE}${endpoint}?api_token=${token}`, {
+    return _pdFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-    });
-    return res.json();
+    }, tokenOverride);
 }
 
 export async function pdPut(endpoint, data, tokenOverride) {
-    const token = tokenOverride || TOKEN;
-    const res = await fetch(`${BASE}${endpoint}?api_token=${token}`, {
+    return _pdFetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-    });
-    return res.json();
+    }, tokenOverride);
 }
 
 // ─── Phone normalization (BR) ────────────────────────────────────────

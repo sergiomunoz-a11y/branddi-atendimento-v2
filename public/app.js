@@ -157,9 +157,70 @@ function setupEventDelegation() {
             case 'close-deal-contacts':
                 closeDealContactsModal();
                 break;
+            case 'toggle-filter-menu':
+                toggleFilterMenu();
+                break;
+            case 'toggle-lead-panel': {
+                const layout = document.querySelector('.inbox-layout');
+                const btn = document.querySelector('.btn-toggle-lead-panel');
+                if (!layout) break;
+                const hidden = layout.classList.toggle('lead-panel-hidden');
+                try { localStorage.setItem('leadPanelHidden', hidden ? '1' : '0'); } catch(_){}
+                if (btn) btn.classList.toggle('active', !hidden);
+                break;
+            }
+            case 'toggle-lp-details':
+                el.closest('.lp-collapsible')?.classList.toggle('open');
+                break;
+            case 'route-dropdown':
+                toggleRouteDropdown();
+                break;
+            case 'route-action': {
+                const team = el.dataset.team;
+                const cid = el.dataset.id;
+                if (team === 'close') closeConv(cid);
+                else routeConv(cid, team);
+                closeRouteDropdown();
+                break;
+            }
         }
     });
 }
+
+// --- Filter Dropdown ---
+function toggleFilterMenu() {
+    const menu = document.getElementById('filter-dropdown-menu');
+    menu?.classList.toggle('open');
+}
+// Close filter menu when clicking outside
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('filter-dropdown');
+    const menu = document.getElementById('filter-dropdown-menu');
+    if (menu?.classList.contains('open') && dd && !dd.contains(e.target)) {
+        menu.classList.remove('open');
+    }
+});
+function updateFilterDot() {
+    const dot = document.getElementById('filter-active-dot');
+    const hasFilter = currentTypeFilter !== 'all' || currentFilter !== 'all';
+    if (dot) dot.classList.toggle('show', hasFilter);
+}
+
+// --- Route Dropdown in Chat Header ---
+function toggleRouteDropdown() {
+    const menu = document.querySelector('.route-dropdown-menu');
+    menu?.classList.toggle('open');
+}
+function closeRouteDropdown() {
+    document.querySelector('.route-dropdown-menu')?.classList.remove('open');
+}
+document.addEventListener('click', (e) => {
+    const dd = document.querySelector('.route-dropdown');
+    const menu = document.querySelector('.route-dropdown-menu');
+    if (menu?.classList.contains('open') && dd && !dd.contains(e.target)) {
+        menu.classList.remove('open');
+    }
+});
 
 // --- Chat Tab Switching ---
 function switchChatTab(tab) {
@@ -171,26 +232,36 @@ function switchChatTab(tab) {
 }
 
 // --- Internal Notes (localStorage) ---
-function saveInternalNote() {
+async function saveInternalNote() {
     if (!currentConversation) return;
     const input = document.getElementById('chat-notes-input');
     const text = (input?.value || '').trim();
     if (!text) return;
-    const key = `ba_notes_${currentConversation.id}`;
-    const notes = JSON.parse(localStorage.getItem(key) || '[]');
-    notes.push({ text, date: new Date().toISOString(), user: currentUser?.name || 'Admin' });
-    localStorage.setItem(key, JSON.stringify(notes));
-    input.value = '';
-    toast('Anotacao salva', 'success');
-    renderConvEvents();
-}
-
-function getInternalNotes(convId) {
-    return JSON.parse(localStorage.getItem(`ba_notes_${convId}`) || '[]');
+    try {
+        await apiFetch(`/api/messages/${currentConversation.id}/note`, {
+            method: 'POST',
+            body: JSON.stringify({ text }),
+        });
+        input.value = '';
+        toast('Anotacao salva', 'success');
+        _lastMessagesHash = '';
+        await loadMessages(currentConversation.id);
+        switchChatTab('message');
+    } catch (err) {
+        toast(`Erro: ${err.message}`, 'error');
+    }
 }
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', async () => {
+    // Restaura estado do lead panel (redesign v2)
+    try {
+        const layout = document.querySelector('.inbox-layout');
+        if (layout && localStorage.getItem('leadPanelHidden') === '1') {
+            layout.classList.add('lead-panel-hidden');
+        }
+    } catch(_){}
+
     // Verifica autenticacao
     const token = getToken();
     if (!token) {
@@ -242,10 +313,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 // --- Polling ---
+let _pollingInProgress = false;
+
 function startPolling() {
-    pollTimer = setInterval(() => {
-        loadInbox(true); // silent = true (nao reseta selecao)
-        if (currentConversation) loadMessages(currentConversation.id, currentConversation.whatsapp_chat_id);
+    pollTimer = setInterval(async () => {
+        if (_pollingInProgress) return; // Evita race condition de polls sobrepostos
+        _pollingInProgress = true;
+        try {
+            await loadInbox(true); // silent = true (nao reseta selecao)
+            if (currentConversation) await loadMessages(currentConversation.id, currentConversation.whatsapp_chat_id);
+        } finally {
+            _pollingInProgress = false;
+        }
     }, 7000);
 }
 
@@ -308,18 +387,19 @@ function setupInboxFilters() {
             chip.classList.add('active');
             currentFilter = chip.dataset.filter;
             renderConversationList();
+            updateFilterDot();
         });
     });
 
     // Filtro por usuário (Admin only)
     const userFilterEl = document.getElementById('inbox-user-filter');
+    const userGroup = document.getElementById('filter-user-group');
     if (userFilterEl && currentUser?.role === 'Admin') {
-        userFilterEl.style.display = '';
+        if (userGroup) userGroup.style.display = '';
         userFilterEl.addEventListener('change', () => loadInbox());
-        // Popula lista de usuários
         apiFetch('/api/users').then(data => {
             const users = data.users || [];
-            userFilterEl.innerHTML = '<option value="">Todos os usuários</option>' +
+            userFilterEl.innerHTML = '<option value="">Todos os usuarios</option>' +
                 users.map(u => `<option value="${u.id}">${escHtml(u.name)} (${u.role})</option>`).join('');
         }).catch(() => {});
     }
@@ -331,6 +411,7 @@ function setupInboxFilters() {
             tab.classList.add('active');
             currentTypeFilter = tab.dataset.type;
             loadInbox();
+            updateFilterDot();
         });
     });
 
@@ -458,8 +539,6 @@ function renderConversationList() {
         const time = conv.last_message ? relativeTime(conv.last_message.created_at) : relativeTime(conv.created_at);
         const isActive = currentConversation?.id === conv.id;
         const hasUnread = (conv.unread_count || 0) > 0;
-        const convType = conv.type || 'inbound';
-        const typeLabel = convType === 'prospecting' ? '🚀 Prospeccao' : '📥 Inbound';
 
         return `<div class="conv-item${isActive ? ' active' : ''}${hasUnread ? ' unread' : ''}" data-id="${conv.id}" data-action="select-conversation">
             <div class="conv-item-top">
@@ -511,9 +590,26 @@ function renderChatArea(conv) {
                 </div>
             </div>
             <div class="chat-header-actions">
-                <button class="btn-sm" data-action="route-conv" data-id="${conv.id}" data-team="comercial">→ Comercial</button>
-                <button class="btn-sm" data-action="route-conv" data-id="${conv.id}" data-team="opec">→ OPEC</button>
-                <button class="btn-sm" data-action="close-conv" data-id="${conv.id}">✕ Fechar</button>
+                <button class="btn-sm btn-toggle-lead-panel" data-action="toggle-lead-panel" title="Painel do lead">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                </button>
+                <div class="route-dropdown">
+                    <button class="btn-sm btn-route-trigger" data-action="route-dropdown">
+                        <svg class="icon icon-sm"><use href="/icons.svg#icon-share"></use></svg> Atribuir
+                    </button>
+                    <div class="route-dropdown-menu">
+                        <button class="route-dropdown-item" data-action="route-action" data-id="${conv.id}" data-team="comercial">
+                            <span class="route-dot" style="background:var(--accent)"></span> Comercial
+                        </button>
+                        <button class="route-dropdown-item" data-action="route-action" data-id="${conv.id}" data-team="opec">
+                            <span class="route-dot" style="background:var(--amber)"></span> OPEC
+                        </button>
+                        <div class="route-dropdown-divider"></div>
+                        <button class="route-dropdown-item route-close" data-action="route-action" data-id="${conv.id}" data-team="close">
+                            <svg class="icon icon-sm"><use href="/icons.svg#icon-x"></use></svg> Fechar conversa
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="messages-wrap" id="messages-wrap">
@@ -608,13 +704,16 @@ async function loadMessages(convId, chatId) {
 
 function renderMessage(msg) {
     const isBot    = msg.sender_type === 'bot';
+    const isNote   = msg.sender_type === 'note';
     const isOut    = msg.direction === 'outbound';
-    const cls      = isBot ? 'bot' : (isOut ? 'outbound' : 'inbound');
+    const cls      = isNote ? 'note' : isBot ? 'bot' : (isOut ? 'outbound' : 'inbound');
     const time     = formatTime(msg.created_at);
 
-    // Nome do remetente: bot, nome do usuário que enviou, ou nada para lead
+    // Nome do remetente
     let sender = '';
-    if (isBot) {
+    if (isNote) {
+        sender = msg.sent_by_name || msg.sender_name || 'Nota interna';
+    } else if (isBot) {
         sender = '🤖 Bot';
     } else if (isOut) {
         sender = msg.sent_by_name || msg.sender_name || 'Equipe';
@@ -785,8 +884,6 @@ async function sendMsg() {
     }
 }
 
-function sendMessage() { return sendMsg(); }
-
 function handleInputKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -870,8 +967,6 @@ function renderLeadPanel(conv) {
     const lead = conv.leads || {};
     const name = lead.name || formatPhone(lead.phone) || 'Desconhecido';
     const initial = name.charAt(0).toUpperCase();
-    const convType = conv.type || 'inbound';
-    const typeLabel = convType === 'prospecting' ? '🚀 Prospeccao' : '📥 Inbound';
 
     // Mostra o content, esconde o empty
     const emptyEl = document.getElementById('lead-panel-empty');
@@ -895,15 +990,16 @@ function renderLeadPanel(conv) {
     // Badge de tipo — clicável para Admin (alterna inbound/prospecting)
     const typeBadge = document.getElementById('lp-type-badge');
     if (typeBadge) {
-        const labels = { inbound: 'Inbound', prospecting: 'Prospeccao' };
-        typeBadge.textContent = labels[convType] || convType;
-        typeBadge.className = `conv-type-badge ${convType}`;
+        const typeLabels = { inbound: 'Inbound', prospecting: 'Prospeccao' };
+        const cType = conv.type || 'inbound';
+        typeBadge.textContent = typeLabels[cType] || cType;
+        typeBadge.className = `conv-type-badge ${cType}`;
 
         if (currentUser?.role === 'Admin') {
             typeBadge.classList.add('clickable');
             typeBadge.title = 'Clique para alterar tipo';
             typeBadge.onclick = async () => {
-                const newType = convType === 'inbound' ? 'prospecting' : 'inbound';
+                const newType = cType === 'inbound' ? 'prospecting' : 'inbound';
                 await apiFetch(`/api/inbox/${conv.id}/type`, {
                     method: 'PATCH',
                     body: JSON.stringify({ type: newType }),
@@ -911,7 +1007,7 @@ function renderLeadPanel(conv) {
                 conv.type = newType;
                 renderLeadPanel(conv);
                 loadInbox();
-                toast(`Tipo alterado para ${labels[newType]}`, 'success');
+                toast(`Tipo alterado para ${typeLabels[newType]}`, 'success');
             };
         } else {
             typeBadge.classList.remove('clickable');
@@ -1074,9 +1170,6 @@ function renderConvEvents() {
     if (conv.created_at) events.push({ text: 'Conversa criada', time: conv.created_at });
     // Routed
     if (conv.assigned_to) events.push({ text: `Atribuida a ${conv.assigned_to}`, time: conv.updated_at || conv.created_at });
-    // Internal notes
-    const notes = getInternalNotes(conv.id);
-    notes.forEach(n => events.push({ text: `Nota: ${n.text.substring(0, 40)}${n.text.length > 40 ? '...' : ''}`, time: n.date }));
 
     events.sort((a, b) => new Date(b.time) - new Date(a.time));
 
@@ -1409,10 +1502,6 @@ async function loadLeads() {
     }
 }
 
-async function syncLead(leadId) {
-    await syncLeadToPipedrive(leadId, document.getElementById(`pd-btn-${leadId}`));
-}
-
 // Setup filtros de leads
 function setupLeadFilters() {
     const setupLeadFilter = id => {
@@ -1696,26 +1785,6 @@ function setupScriptForm() {
     });
 }
 
-function openScriptEditor() {
-    document.getElementById('modal-script-title').textContent = 'Novo Script';
-    document.getElementById('script-id').value = '';
-    document.getElementById('form-script')?.reset();
-    const pub = document.getElementById('script-is-public');
-    if (pub) pub.checked = true;
-    const label = document.getElementById('script-visibility-label');
-    if (label) label.textContent = 'Público — visível para toda a equipe';
-    openModal('modal-script');
-}
-
-function closeScriptEditor() {
-    closeModal('modal-script');
-}
-
-function saveScript() {
-    // Trigger the form submit event
-    document.getElementById('form-script')?.requestSubmit();
-}
-
 function editScript(scriptId) {
     const s = allScripts.find(x => x.id === scriptId);
     if (!s) return;
@@ -1935,11 +2004,6 @@ function closeWaConnect() {
     closeModal('modal-wa-connect');
     checkHealth();
 }
-
-// Aliases for window exports
-function openWhatsAppModal() { openWaConnect(); }
-function closeWhatsAppModal() { closeWaConnect(); }
-function connectWhatsApp() { generateWaQR(); }
 
 async function generateWaQR() {
     const btn = document.getElementById('btn-wa-generate-qr');
@@ -2224,13 +2288,13 @@ function openEditUserForm(user) {
     if (tokenEl) {
         tokenEl.value = '';
         tokenEl.placeholder = user.pipedrive_api_token
-            ? `Token salvo (${user.pipedrive_api_token})`
+            ? 'Token salvo ••••••. Deixe vazio para manter.'
             : 'Cole o token aqui (Pipedrive > Config > Preferencias > API)';
     }
     const tokenStatus = document.getElementById('uf-token-status');
     if (tokenStatus) {
         tokenStatus.textContent = user.pipedrive_api_token
-            ? `✅ Token configurado (${user.pipedrive_api_token}). Deixe vazio para manter.`
+            ? '✅ Token configurado. Deixe vazio para manter.'
             : 'Necessario para que atividades aparecam como criadas por este usuario no Pipedrive';
         tokenStatus.style.color = user.pipedrive_api_token ? 'var(--accent)' : 'var(--text-muted)';
     }
@@ -2467,24 +2531,6 @@ async function syncLeadToPipedrive(leadId, btnEl) {
     }
 }
 
-// Stub CRM sync functions for onclick compatibility
-function syncCRM() { toast('Sync CRM iniciado...', 'info'); }
-function syncAllToday() { toast('Sync All Today iniciado...', 'info'); }
-
-// --- Conversation actions (aliases) ---
-function loadConversation(convId) { return selectConversation(convId); }
-function claimConversation(convId) {
-    if (!convId) return;
-    apiFetch(`/api/inbox/${convId}/claim`, { method: 'POST' })
-        .then(() => { toast('Conversa reivindicada', 'success'); loadInbox(); })
-        .catch(err => toast(`Erro: ${err.message}`, 'error'));
-}
-function releaseConversation(convId) {
-    if (!convId) return;
-    apiFetch(`/api/inbox/${convId}/release`, { method: 'POST' })
-        .then(() => { toast('Conversa liberada', 'success'); loadInbox(); })
-        .catch(err => toast(`Erro: ${err.message}`, 'error'));
-}
 
 // --- HISTORY ---
 
@@ -2562,9 +2608,9 @@ async function openHistoryMessages(convId, leadName) {
                 const cls  = msg.direction === 'inbound' ? 'inbound' : msg.sender_type === 'bot' ? 'bot' : 'outbound';
                 const sender = msg.sender_type === 'bot' ? '🤖 Bot' : msg.direction === 'inbound' ? '👤 Lead' : '👩 Atendente';
                 return `<div class="msg-bubble ${cls}" style="max-width:85%">
-                    <div class="msg-text">${msg.content || ''}</div>
+                    <div class="msg-text">${escHtml(msg.content || '')}</div>
                     <div class="msg-meta">
-                        <span class="msg-sender ${cls === 'bot' ? 'bot-label' : ''}">${sender}</span>
+                        <span class="msg-sender ${cls === 'bot' ? 'bot-label' : ''}">${escHtml(sender)}</span>
                         <span class="msg-time">${date} ${time}</span>
                     </div>
                 </div>`;
@@ -2574,15 +2620,8 @@ async function openHistoryMessages(convId, leadName) {
         }
 
     } catch (err) {
-        if (body) body.innerHTML = `<div class="loading-row" style="color:var(--red)">Erro: ${err.message}</div>`;
+        if (body) body.innerHTML = `<div class="loading-row" style="color:var(--red)">Erro: ${escHtml(err.message)}</div>`;
     }
-}
-
-function showConversationMessages(convId) {
-    return openHistoryMessages(convId, 'Conversa');
-}
-function closeHistoryModal() {
-    closeModal('modal-history-msgs');
 }
 
 // Setup history filters
@@ -2794,35 +2833,23 @@ window.switchSettingsTab = switchSettingsTab;
 // Inbox / Chat
 window.selectConversation = selectConversation;
 window.sendMsg            = sendMsg;
-window.sendMessage        = sendMessage;
 window.handleInputKey     = handleInputKey;
 window.toggleScriptsMenu  = toggleScriptsMenu;
 window.applyScript        = applyScript;
 window.setInboxFilter     = setInboxFilter;
 window.setInboxType       = setInboxType;
-window.loadConversation   = loadConversation;
-window.claimConversation  = claimConversation;
-window.releaseConversation = releaseConversation;
 
 // Routing
 window.routeConv = routeConv;
 window.closeConv = closeConv;
 
 // Leads
-window.syncLead            = syncLead;
 window.syncLeadToPipedrive = syncLeadToPipedrive;
 window.exportLeadsCSV      = exportLeadsCSV;
-
-// CRM sync stubs
-window.syncCRM       = syncCRM;
-window.syncAllToday  = syncAllToday;
 
 // Scripts
 window.editScript        = editScript;
 window.deleteScript      = deleteScript;
-window.openScriptEditor  = openScriptEditor;
-window.closeScriptEditor = closeScriptEditor;
-window.saveScript        = saveScript;
 
 // Modals
 window.openModal  = openModal;
@@ -2848,14 +2875,9 @@ window.openWaConnect      = openWaConnect;
 window.closeWaConnect     = closeWaConnect;
 window.generateWaQR       = generateWaQR;
 window.disconnectWa       = disconnectWa;
-window.openWhatsAppModal  = openWhatsAppModal;
-window.closeWhatsAppModal = closeWhatsAppModal;
-window.connectWhatsApp    = connectWhatsApp;
 
 // History
 window.openHistoryMessages      = openHistoryMessages;
-window.showConversationMessages = showConversationMessages;
-window.closeHistoryModal        = closeHistoryModal;
 
 // Dashboard
 window.loadDashboard = loadDashboard;

@@ -40,7 +40,8 @@ const DEFAULTS = {
 
 async function sendBotMsg(chatId, conversationId, text) {
     try {
-        await sendMessage(chatId, text);
+        const result = await sendMessage(chatId, text);
+        const realMsgId = result?.message_id || result?.id || `bot_worker_${Date.now()}_${Math.random().toString(36).slice(2)}`;
         const { saveMessage } = await import('./supabase.js');
         await saveMessage({
             conversation_id:    conversationId,
@@ -49,7 +50,7 @@ async function sendBotMsg(chatId, conversationId, text) {
             sender_name:        'Bot Branddi',
             content:            text,
             attachments:        [],
-            unipile_message_id: `bot_worker_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            unipile_message_id: realMsgId,
         });
     } catch (err) {
         logger.error('Worker: erro enviando msg', { error: err.message, conversationId });

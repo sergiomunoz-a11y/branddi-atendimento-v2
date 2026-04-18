@@ -32,6 +32,7 @@ import simulateRouter              from './routes/simulate.js';
 import { startPolling }            from './services/unipile.js';
 import { startCrmSyncWorker }      from './services/crm-sync.js';
 import { startChatbotWorkers }     from './services/chatbot-workers.js';
+import { getPipedriveCircuitStatus } from './services/pipedrive.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app  = express();
@@ -41,6 +42,9 @@ const PORT = process.env.PORT || 3838;
 const corsOrigin = process.env.NODE_ENV === 'production'
     ? (process.env.FRONTEND_URL || (() => { throw new Error('FRONTEND_URL required in production'); })())
     : (process.env.FRONTEND_URL || '*');
+
+// ─── Trust proxy (Railway, Render, etc.) ─────────────────────────────
+app.set('trust proxy', 1);
 
 // ─── Middleware ───────────────────────────────────────────────────────
 app.use(compression());
@@ -123,6 +127,7 @@ app.get('/api/health', async (req, res) => {
             unipile:   waConnected,
             waStatus,
             pipedrive: !!(process.env.PIPEDRIVE_API_TOKEN),
+            pipedrive_circuit: getPipedriveCircuitStatus(),
             supabase:  !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY),
         }
     };
@@ -134,12 +139,12 @@ app.get('/api/health', async (req, res) => {
 // ─── Rotas públicas (antes do middleware de auth) ─────────────────────
 app.use('/api', authRouter);
 app.use('/api', webhooksRouter);
-app.use('/api', simulateRouter);  // Simulador do bot (sem auth para testes)
 
 // ─── Middleware global de autenticação ────────────────────────────────
 app.use('/api', requireAuth);
 
 // ─── Rotas protegidas ─────────────────────────────────────────────────
+app.use('/api', simulateRouter);  // Simulador do bot (agora protegido)
 app.use('/api', inboxRouter);
 app.use('/api', messagesRouter);
 app.use('/api', leadsRouter);

@@ -5,7 +5,7 @@
 import { updateConversation, updateLead, createRoutingEvent } from './supabase.js';
 import { sendMessage } from './unipile.js';
 import { saveMessage } from './supabase.js';
-import { isBusinessHours, calculatePriority } from './chatbot-nlp.js';
+import { calculatePriority } from './chatbot-nlp.js';
 import { trackBotEvent } from './chatbot-workers.js';
 import logger from './logger.js';
 import supabase from './supabase.js';
@@ -15,7 +15,7 @@ const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 const NVIDIA_MODEL = process.env.NVIDIA_MODEL || 'meta/llama-3.3-70b-instruct';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-20250414';
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -41,31 +41,66 @@ logger.info('LLM Bot config', {
 
 // ─── System Prompt ──────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você é a Ana da Branddi. Responda SOMENTE com JSON válido.
+const SYSTEM_PROMPT = `Você é o assistente da Branddi no WhatsApp. Responda SOMENTE com JSON válido.
 
-A Branddi protege marcas na internet. Brand bidding (concorrentes no Google Ads inflando CPC — reduzimos até 90%), fraude digital (sites/perfis falsos), violação de marca e proteção em marketplaces. Quem RECEBEU notificação nossa: identificamos infração de marca protegida. Resultados: +R$90M economizados.
+BRANDDI: Online Brand Protection. Blindagem digital focada em Performance.
+- Brand Bidding: concorrentes no Google Ads inflando CPC. Reduzimos até 70%.
+- Golpes Digitais: sites falsos, perfis fakes. Take down rápido.
+- Violação de Marca: pirataria em marketplaces.
+- Buy Box Protection: regulamentação de preços.
+Base jurídica: STJ, Art. 195 LPI.
 
-COMO FALAR:
-- WhatsApp: máximo 2 linhas, direto ao ponto, como pessoa real
-- NUNCA repita/parafraseie o que o lead disse. NUNCA diga "entendi que", "vou registrar", "obrigado por"
-- Crie respostas originais e naturais a cada mensagem. Não use frases prontas.
-- 1 emoji max. Sem markdown/asteriscos.
+REGRAS DE COMUNICAÇÃO (CRÍTICO — siga sempre):
+- MÁXIMO 1-2 linhas por mensagem. Isso é WhatsApp, não email.
+- Seja HUMANO e EMPÁTICO. CALIBRE O TOM conforme o que o lead diz:
+  * Lead relata DOR (golpes, fraudes, concorrentes, prejuízo) → tom de PREOCUPAÇÃO e ACOLHIMENTO. "Infelizmente isso está cada vez mais comum... mas que bom que nos encontrou, vamos resolver."
+  * Lead demonstra INTERESSE (quer conhecer, reunião, orçamento) → tom de ENTUSIASMO. "Que bom! Vamos te direcionar pro time certo."
+  * NUNCA responda "Que ótimo!" quando o lead relata um problema/dor. Isso é insensível.
+- NUNCA repita, parafraseie ou resuma o que o lead acabou de dizer. Proibido "Entendi que...", "Compreendo seu interesse em...", "Com as informações de que...".
+- NUNCA ofereça menu numérico (1, 2, 3). Converse naturalmente.
+- NUNCA fale valores ou garanta prazos.
+- 1 emoji max. Sem markdown/asteriscos/negrito.
+- Faça UMA pergunta por vez. Siga o fluxo ideal passo a passo.
 
-COLETAR: empresa + o que busca. Site/nome/cargo = bônus.
+TRIAGEM — 3 fluxos:
+
+COMERCIAL: Quer serviços/reunião/diagnóstico.
+- Dados obrigatórios ANTES de classificar: empresa + site/domínio + contexto do problema.
+- "Branddi" NÃO é empresa do lead — somos nós. Se disser que é da Branddi, pergunte qual empresa quer proteger.
+- NUNCA prometa diagnóstico gratuito imediato.
+- Ao classificar: diga que um consultor entrará em contato.
+- FLUXO IDEAL (siga os passos, NÃO pule):
+  1. Lead diz o que quer → reaja com empatia calibrada ao tom (dor? preocupação + acolhimento. interesse? entusiasmo) + pergunte a empresa se não tem
+  2. Lead dá empresa → "Pode me confirmar o domínio oficial da [empresa]?"
+  3. Lead dá domínio → pergunte o problema E SEMPRE dê exemplos: "Estão enfrentando concorrentes comprando seus termos de marca, domínios/sites falsos, ou revendedores não autorizados?"
+  4. Com empresa + domínio + contexto → classifique com tom esperançoso: lamente a dor + celebre a solução
+
+OPEC: Recebeu notificação nossa.
+- Pergunte só a empresa (se não tem nos dados) e classifique rápido. Encaminhe direto para Operações.
+
+CS: Já é cliente.
+- Confirme empresa e encaminhe para Customer Success.
 
 AÇÕES:
-- classify: tem empresa + intenção → encaminhe. Diga algo como encaminhar para especialista que fará diagnóstico gratuito (comercial) ou que operações vai resolver (opec). Use suas próprias palavras, nunca copie frases deste prompt.
-- escalate: lead frustrado/quer humano com insistência
-- continue: falta info → pergunte naturalmente. "Oi" → "Oi! Como posso ajudar?" e pare.
+- continue: falta dado obrigatório → pergunte naturalmente
+- classify: tem empresa + site + contexto do problema → encaminhe
+- escalate: lead frustrado ou insistindo em humano
 
-Se lead quer reunião/atendente SEM estar frustrado: pergunte só a empresa se não tem, e classifique. Não enrole.
+IMPORTANTE: Os "Dados do lead" já contêm informações do perfil WhatsApp (nome, telefone, empresa). NUNCA pergunte algo que já está nesses dados. Use o nome do lead naturalmente.
 
-Menu: 1=serviços(comercial) 2=notificação(opec) 3=dúvida(comercial)
+TOM — exemplos de referência (nunca copie literalmente, adapte ao contexto):
+SAUDAÇÃO: "Oi, [nome]! Bem-vindo à Branddi, como posso te ajudar? 😊"
+DOR/PROBLEMA: "Poxa, isso é muito sério e infelizmente está cada vez mais comum. Mas que bom que nos encontrou, vamos te ajudar!"
+INTERESSE: "Que bom que chegou até a gente! Qual a empresa de vocês?"
+COLETA DOMÍNIO: "Pode me confirmar o domínio oficial da [empresa]?"
+CLASSIFICAÇÃO (com dor): "Nosso time vai cuidar disso pra vocês. Um consultor entra em contato em breve 😊"
+CLASSIFICAÇÃO (com interesse): "Excelente! Um consultor entra em contato em breve pra apresentar as soluções 😊"
+Na primeira mensagem, SEMPRE cumprimente pelo nome se disponível e dê boas-vindas.
 
-Máximo 4 trocas. Com 3+, classifique com o que tem.
+Máximo 6 trocas. Na 5ª+, classifique com o que tem.
 
 JSON:
-{"message":"texto","action":"continue|classify|escalate","classification":"comercial|opec|null","extracted":{"intent":"servicos|notificacao|cliente|reuniao|null","company":"nome|null","domain":"site|null","contact_name":"nome|null","contact_role":"cargo|null","context":"resumo|null"},"reason":"lógica"}`;
+{"message":"texto curto","action":"continue|classify|escalate","classification":"comercial|opec|cs|null","extracted":{"intent":"servicos|notificacao|cliente|reuniao|null","company":"nome|null","domain":"site|null","contact_name":"nome|null","contact_role":"cargo|null","context":"resumo|null"},"reason":"lógica"}`;
 
 // ─── Processador principal ──────────────────────────────────────────
 
@@ -89,19 +124,16 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
             lead.email ? `Email: ${lead.email}` : null,
         ].filter(Boolean).join('\n');
 
-        const hours = isBusinessHours();
-        const hoursNote = hours.active
-            ? ''
-            : '\n[NOTA: Fora do horário comercial. Mencione brevemente que o atendimento humano retorna no próximo dia útil, MAS continue qualificando normalmente — faça perguntas, colete informações, seja útil. NÃO pare no aviso de horário.]';
-
         const knownData = [
             answers.intent ? `Intenção já identificada: ${answers.intent}` : null,
             answers.company_name ? `Empresa já informada: ${answers.company_name}` : null,
             answers.domain ? `Site já informado: ${answers.domain}` : null,
+            answers.contact_name ? `Nome do contato: ${answers.contact_name}` : null,
+            answers.contact_role ? `Cargo: ${answers.contact_role}` : null,
             answers.context ? `Contexto já coletado: ${answers.context}` : null,
         ].filter(Boolean).join('\n');
 
-        const userPrompt = `${leadContext ? `Dados do lead:\n${leadContext}\n\n` : ''}${knownData ? `Informações já coletadas:\n${knownData}\n\n` : ''}${hoursNote}Mensagem ${msgCount + 1} do lead. Histórico da conversa:\n${history}\n\nNova mensagem do lead: "${text}"`;
+        const userPrompt = `${leadContext ? `Dados do lead:\n${leadContext}\n\n` : ''}${knownData ? `Informações já coletadas:\n${knownData}\n\n` : ''}Mensagem ${msgCount + 1} do lead. Histórico da conversa:\n${history}\n\nNova mensagem do lead: "${text}"`;
 
         // Chama LLM (Anthropic ou Gemini)
         const llmResponse = await _callLLM(userPrompt);
@@ -121,6 +153,8 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
             if (parsed.extracted.intent && !answers.intent) answers.intent = parsed.extracted.intent;
             if (parsed.extracted.company) answers.company_name = parsed.extracted.company;
             if (parsed.extracted.domain) answers.domain = parsed.extracted.domain;
+            if (parsed.extracted.contact_name) answers.contact_name = parsed.extracted.contact_name;
+            if (parsed.extracted.contact_role) answers.contact_role = parsed.extracted.contact_role;
             if (parsed.extracted.context) answers.context = parsed.extracted.context;
         }
         answers._llm_msg_count = msgCount + 1;
@@ -161,7 +195,21 @@ export async function processLLMBotMessage(conversation, text, chatId, attachmen
 async function _callLLM(userMessage) {
     if (LLM_PROVIDER === 'nvidia') return _callNvidia(userMessage);
     if (LLM_PROVIDER === 'anthropic') return _callAnthropic(userMessage);
-    if (LLM_PROVIDER === 'gemini') return _callGemini(userMessage);
+    if (LLM_PROVIDER === 'gemini') {
+        const result = await _callGemini(userMessage);
+        if (result) return result;
+        // Gemini falhou (503/quota) — tenta NVIDIA como fallback
+        if (NVIDIA_API_KEY) {
+            logger.info('Gemini failed, falling back to NVIDIA');
+            return _callNvidia(userMessage);
+        }
+        // Tenta Anthropic como último fallback
+        if (ANTHROPIC_API_KEY) {
+            logger.info('Gemini failed, falling back to Anthropic');
+            return _callAnthropic(userMessage);
+        }
+        return null;
+    }
     return null;
 }
 
@@ -174,7 +222,7 @@ async function _callNvidia(userMessage) {
         },
         body: JSON.stringify({
             model: NVIDIA_MODEL,
-            max_tokens: 500,
+            max_tokens: 1024,
             temperature: 0.3,
             response_format: { type: 'json_object' },
             messages: [
@@ -204,7 +252,7 @@ async function _callAnthropic(userMessage) {
         },
         body: JSON.stringify({
             model: ANTHROPIC_MODEL,
-            max_tokens: 500,
+            max_tokens: 1024,
             temperature: 0.3,
             system: SYSTEM_PROMPT,
             messages: [{ role: 'user', content: userMessage }],
@@ -231,8 +279,9 @@ async function _callGemini(userMessage) {
             contents: [{ parts: [{ text: userMessage }] }],
             generationConfig: {
                 temperature: 0.3,
-                maxOutputTokens: 500,
+                maxOutputTokens: 1024,
                 responseMimeType: 'application/json',
+                thinkingConfig: { thinkingBudget: 0 },
             },
         }),
     });
@@ -250,22 +299,40 @@ async function _callGemini(userMessage) {
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function _parseLLMResponse(raw) {
+    // Attempt 1: parse full JSON
     try {
         const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const parsed = JSON.parse(cleaned);
         if (!parsed.message || !parsed.action) return null;
         if (!['continue', 'classify', 'escalate'].includes(parsed.action)) parsed.action = 'continue';
         return parsed;
-    } catch {
-        const match = raw.match(/\{[\s\S]*\}/);
-        if (match) {
-            try {
-                const parsed = JSON.parse(match[0]);
-                if (parsed.message && parsed.action) return parsed;
-            } catch { /* */ }
-        }
-        return null;
+    } catch { /* continue to fallback */ }
+
+    // Attempt 2: extract JSON object from text
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+        try {
+            const parsed = JSON.parse(match[0]);
+            if (parsed.message && parsed.action) return parsed;
+        } catch { /* continue to fallback */ }
     }
+
+    // Attempt 3: extract message from truncated JSON via regex
+    const msgMatch = raw.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    const actionMatch = raw.match(/"action"\s*:\s*"(continue|classify|escalate)"/);
+    const classMatch = raw.match(/"classification"\s*:\s*"(comercial|opec|cs)"/);
+    if (msgMatch?.[1]) {
+        logger.info('LLM response recovered from truncated JSON', { msgLen: msgMatch[1].length });
+        return {
+            message: msgMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+            action: actionMatch?.[1] || 'continue',
+            classification: classMatch?.[1] || null,
+            extracted: {},
+            reason: 'recovered from truncated response',
+        };
+    }
+
+    return null;
 }
 
 async function _getConversationHistory(conversationId) {
@@ -286,20 +353,25 @@ async function _getConversationHistory(conversationId) {
 
 async function _sendBotMsg(chatId, conversationId, text) {
     if (!text) return;
-    await sendMessage(chatId, text);
-    await saveMessage({
-        conversation_id: conversationId,
-        direction: 'outbound',
-        sender_type: 'bot',
-        sender_name: 'Bot Branddi',
-        content: text,
-        unipile_message_id: `llm_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    });
+    try {
+        const result = await sendMessage(chatId, text);
+        const realMsgId = result?.message_id || result?.id || `llm_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        await saveMessage({
+            conversation_id: conversationId,
+            direction: 'outbound',
+            sender_type: 'bot',
+            sender_name: 'Bot Branddi',
+            content: text,
+            unipile_message_id: realMsgId,
+        });
+    } catch (err) {
+        logger.error('LLM bot: erro enviando msg', { error: err.message, conversationId });
+    }
 }
 
 async function _classify(conversation, answers, classification, chatId) {
     const priority = calculatePriority(answers, null, conversation.leads);
-    const team = classification === 'opec' ? 'opec' : 'comercial';
+    const team = classification === 'opec' ? 'opec' : classification === 'cs' ? 'cs' : 'comercial';
 
     await createRoutingEvent({
         conversation_id: conversation.id,
@@ -312,6 +384,7 @@ async function _classify(conversation, answers, classification, chatId) {
     if (conversation.lead_id) {
         const leadUpdates = {};
         if (answers.company_name) leadUpdates.company_name = answers.company_name;
+        if (answers.contact_name) leadUpdates.name = answers.contact_name;
         if (answers.intent) leadUpdates.classification = classification;
         if (Object.keys(leadUpdates).length > 0) {
             await updateLead(conversation.lead_id, leadUpdates);
@@ -328,6 +401,7 @@ async function _classify(conversation, answers, classification, chatId) {
         },
         assigned_to: team,
         status: 'in_progress',
+        bot_away_sent: true, // Evita away message — bot já mandou msg de encerramento
     });
 
     await trackBotEvent(conversation.id, 'classified', {
@@ -345,7 +419,7 @@ async function _classify(conversation, answers, classification, chatId) {
 
 async function _escalate(conversation, answers, chatId, reason) {
     const priority = calculatePriority(answers, null, conversation.leads);
-    const team = answers.intent === 'notificacao' ? 'opec' : 'comercial';
+    const team = answers.intent === 'notificacao' ? 'opec' : answers.intent === 'cliente' ? 'cs' : 'comercial';
 
     await createRoutingEvent({
         conversation_id: conversation.id,
@@ -366,6 +440,7 @@ async function _escalate(conversation, answers, chatId, reason) {
         },
         assigned_to: team,
         status: 'in_progress',
+        bot_away_sent: true, // Evita away message — bot já mandou msg de encerramento
     });
 
     await trackBotEvent(conversation.id, 'escalated', {

@@ -7,9 +7,12 @@
     <meta name="description" content="Plataforma central de atendimento WhatsApp da Branddi — inbox inteligente, chatbot de triagem e sincronizacao com CRM." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
     <link rel="stylesheet" href="style.css" />
+    <!-- Redesign v2 (Remix). Comente a linha abaixo para rollback instantaneo. -->
+    <link rel="stylesheet" href="style-v2.css" />
 </head>
 <body>
 <!-- ─── Side Nav ─────────────────────────────────────────────── -->
@@ -79,33 +82,44 @@
         <!-- Sidebar: Lista de conversas -->
         <aside class="inbox-sidebar">
             <div class="sidebar-header">
-                <h2 class="sidebar-title">Conversas</h2>
-
-                <!-- Abas por tipo (visibilidade controlada por JS via role) -->
-                <div class="inbox-type-tabs" id="inbox-type-tabs">
-                    <button class="type-tab active" data-type="all" id="type-tab-all">Todos</button>
-                    <button class="type-tab" data-type="inbound" id="type-tab-inbound">
-                        🌐 Site
-                    </button>
-                    <button class="type-tab" data-type="prospecting" id="type-tab-prospecting">
-                        🚀 Prospecção
-                    </button>
+                <div class="sidebar-header-row">
+                    <h2 class="sidebar-title">Conversas</h2>
+                    <div class="sidebar-header-actions">
+                        <!-- Filter dropdown -->
+                        <div class="filter-dropdown" id="filter-dropdown">
+                            <button class="filter-dropdown-trigger" data-action="toggle-filter-menu" title="Filtrar">
+                                <svg class="icon icon-sm"><use href="/icons.svg#icon-filter"></use></svg>
+                                <span class="filter-active-dot" id="filter-active-dot"></span>
+                            </button>
+                            <div class="filter-dropdown-menu" id="filter-dropdown-menu">
+                                <div class="filter-group">
+                                    <div class="filter-group-label">Origem</div>
+                                    <div class="inbox-type-tabs" id="inbox-type-tabs">
+                                        <button class="type-tab active" data-type="all" id="type-tab-all">Todos</button>
+                                        <button class="type-tab" data-type="inbound" id="type-tab-inbound">Site</button>
+                                        <button class="type-tab" data-type="prospecting" id="type-tab-prospecting">Prospecao</button>
+                                    </div>
+                                </div>
+                                <div class="filter-group">
+                                    <div class="filter-group-label">Status</div>
+                                    <div class="sidebar-filters">
+                                        <button class="filter-chip active" data-filter="all">Todos</button>
+                                        <button class="filter-chip" data-filter="waiting">Aguardando</button>
+                                        <button class="filter-chip" data-filter="in_progress">Em andamento</button>
+                                    </div>
+                                </div>
+                                <div class="filter-group" id="filter-user-group" style="display:none">
+                                    <div class="filter-group-label">Usuario</div>
+                                    <select class="sidebar-search" id="inbox-user-filter" style="font-size:12px;padding:6px 8px">
+                                        <option value="">Todos os usuarios</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Filtros de status -->
-                <div class="sidebar-filters">
-                    <button class="filter-chip active" data-filter="all">Todos</button>
-                    <button class="filter-chip" data-filter="waiting">Aguardando</button>
-                    <button class="filter-chip" data-filter="in_progress">Em andamento</button>
-                </div>
-
-                <!-- Filtro por usuário (Admin only) -->
-                <select class="sidebar-search" id="inbox-user-filter" style="display:none;font-size:12px;padding:6px 8px">
-                    <option value="">Todos os usuários</option>
-                </select>
-
                 <!-- Busca de conversas -->
-                <input type="search" class="sidebar-search" id="inbox-search" placeholder="Buscar conversa..." autocomplete="off" name="conv-filter" data-form-type="other" />
+                <input type="search" class="sidebar-search" id="inbox-search" placeholder="Buscar conversa..." autocomplete="nope" name="conv-filter" data-form-type="other" />
             </div>
             <div class="conversation-list" id="conversation-list">
                 <div class="skeleton-conv-item"><div class="skeleton-conv-row"><div class="skeleton skeleton-circle"></div><div style="flex:1"><div class="skeleton skeleton-line" style="width:60%"></div><div class="skeleton skeleton-line-sm" style="width:40%"></div></div></div></div>
@@ -141,41 +155,37 @@
                     <div class="lp-avatar" id="lp-avatar">?</div>
                     <div class="lp-editable-field" id="lp-name-wrap">
                         <span class="lp-name" id="lp-name">—</span>
-                        <button class="lp-edit-btn" data-field="name" title="Editar nome">✏️</button>
+                        <button class="lp-edit-btn" data-field="name" title="Editar nome"><svg class="icon icon-sm"><use href="/icons.svg#icon-edit"></use></svg></button>
                     </div>
                     <div class="lp-editable-field" id="lp-phone-wrap">
                         <span class="lp-phone" id="lp-phone">—</span>
-                        <button class="lp-edit-btn" data-field="phone" title="Editar telefone">✏️</button>
+                        <button class="lp-edit-btn" data-field="phone" title="Editar telefone"><svg class="icon icon-sm"><use href="/icons.svg#icon-edit"></use></svg></button>
                     </div>
                     <div class="lp-editable-field" id="lp-company-wrap">
                         <span class="lp-company" id="lp-company"></span>
-                        <button class="lp-edit-btn" data-field="company_name" title="Editar empresa">✏️</button>
+                        <button class="lp-edit-btn" data-field="company_name" title="Editar empresa"><svg class="icon icon-sm"><use href="/icons.svg#icon-edit"></use></svg></button>
                     </div>
-                </div>
-
-                <!-- Tags -->
-                <div class="lp-section">
-                    <div class="lp-section-title">Tags</div>
-                    <div class="lp-tags" id="lp-tags">—</div>
+                    <div class="lp-tags" id="lp-tags"></div>
                 </div>
 
                 <!-- Deals vinculados no Pipedrive (deal picker) -->
                 <div class="lp-section lp-deal-section" id="lp-deal-section">
-                    <div class="lp-section-title">Deals no Pipedrive</div>
+                    <div class="lp-section-title">
+                        <svg class="icon icon-sm"><use href="/icons.svg#icon-pipedrive"></use></svg>
+                        Deals
+                    </div>
                     <div id="lp-deal-content">
                         <div class="lp-deal-loading" id="lp-deal-loading" style="display:none">
                             <span class="lp-muted">Buscando deals...</span>
                         </div>
                         <div class="deal-picker" id="lp-deal-picker" style="display:none">
                             <div class="deal-picker-hint lp-muted" id="lp-deal-hint">Selecione o deal para registrar atividades:</div>
-                            <div class="deal-picker-list" id="lp-deal-list">
-                                <!-- Deals renderizados via JS -->
-                            </div>
+                            <div class="deal-picker-list" id="lp-deal-list"></div>
                         </div>
                         <div id="lp-deal-notfound" style="display:none">
-                            <p class="lp-muted">Nenhum deal vinculado a este número.</p>
+                            <p class="lp-muted">Nenhum deal vinculado.</p>
                             <button class="btn-sm btn-primary" id="btn-create-deal-lp">
-                                + Criar deal
+                                <svg class="icon icon-sm"><use href="/icons.svg#icon-plus"></use></svg> Criar deal
                             </button>
                         </div>
                     </div>
@@ -183,76 +193,88 @@
 
                 <!-- Anotação Pipedrive (aparece quando deal selecionado) -->
                 <div class="lp-section" id="lp-activities-section" style="display:none">
-                    <div class="lp-section-title">Anotação no Pipedrive</div>
                     <div class="lp-act-buttons">
                         <button class="btn-sm btn-outline lp-act-btn" id="btn-act-note" style="width:100%">
-                            📝 Salvar transcrição como anotação
+                            <svg class="icon icon-sm"><use href="/icons.svg#icon-note"></use></svg> Salvar transcricao
                         </button>
                     </div>
-                    <p class="lp-muted" style="font-size:10px;margin-top:6px">Atividades WhatsApp e Resposta são criadas automaticamente</p>
                 </div>
 
                 <!-- Etiquetas Pipedrive -->
                 <div class="lp-section" id="lp-labels-section">
-                    <div class="lp-section-title">Etiquetas Pipedrive</div>
+                    <div class="lp-section-title">
+                        <svg class="icon icon-sm"><use href="/icons.svg#icon-tag"></use></svg>
+                        Etiquetas
+                    </div>
                     <div class="lp-labels-container" id="lp-labels-container">
                         <span class="lp-muted">Carregando...</span>
                     </div>
                 </div>
 
-                <!-- Historico de conversas do lead -->
-                <div class="lp-section">
-                    <div class="lp-section-title">Historico de conversas</div>
-                    <div class="lp-history-list" id="lp-history-list">
-                        <span class="lp-muted">Nenhuma conversa anterior</span>
-                    </div>
-                </div>
-
-                <!-- Botao sincronizar Pipedrive -->
-                <div class="lp-section">
-                    <button class="btn-sm btn-outline" id="btn-sync-pipedrive-lp" style="width:100%">
-                        🔄 Sincronizar com Pipedrive
+                <!-- Collapsible: Pipedrive sync + History + Metadata + Events -->
+                <div class="lp-section lp-collapsible">
+                    <button class="lp-collapse-toggle" data-action="toggle-lp-details">
+                        <svg class="icon icon-sm lp-collapse-chevron"><use href="/icons.svg#icon-chevron-right"></use></svg>
+                        Mais detalhes
                     </button>
-                </div>
+                    <div class="lp-collapse-body" id="lp-details-body">
 
-                <!-- Sobre a conversa (metadata técnica) -->
-                <div class="lp-section">
-                    <div class="lp-section-title">Sobre a conversa</div>
-                    <div class="lp-info-grid">
-                        <div class="lp-info-item">
-                            <span class="lp-info-label">ID</span>
-                            <span class="lp-info-value" id="lp-conv-id">—</span>
+                        <!-- Sync button -->
+                        <div class="lp-detail-group">
+                            <button class="btn-sm btn-outline" id="btn-sync-pipedrive-lp" style="width:100%">
+                                <svg class="icon icon-sm"><use href="/icons.svg#icon-sync"></use></svg> Sincronizar com Pipedrive
+                            </button>
                         </div>
-                        <div class="lp-info-item">
-                            <span class="lp-info-label">Status</span>
-                            <span class="lp-info-value" id="lp-conv-status">—</span>
-                        </div>
-                        <div class="lp-info-item">
-                            <span class="lp-info-label">Tipo</span>
-                            <span class="lp-info-value">
-                                <span class="conv-type-badge" id="lp-type-badge">—</span>
-                            </span>
-                        </div>
-                        <div class="lp-info-item">
-                            <span class="lp-info-label">Origem</span>
-                            <span class="lp-info-value" id="lp-conv-origin">—</span>
-                        </div>
-                        <div class="lp-info-item">
-                            <span class="lp-info-label">Atribuido a</span>
-                            <span class="lp-info-value" id="lp-conv-assigned">—</span>
-                        </div>
-                        <div class="lp-info-item">
-                            <span class="lp-info-label">Criado em</span>
-                            <span class="lp-info-value" id="lp-conv-created">—</span>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Eventos da conversa -->
-                <div class="lp-section">
-                    <div class="lp-section-title">Eventos da conversa</div>
-                    <div class="lp-events-list" id="lp-events-list">
-                        <span class="lp-muted">Nenhum evento registrado</span>
+                        <!-- Historico de conversas do lead -->
+                        <div class="lp-detail-group">
+                            <div class="lp-section-title">Historico</div>
+                            <div class="lp-history-list" id="lp-history-list">
+                                <span class="lp-muted">Nenhuma conversa anterior</span>
+                            </div>
+                        </div>
+
+                        <!-- Sobre a conversa -->
+                        <div class="lp-detail-group">
+                            <div class="lp-section-title">Conversa</div>
+                            <div class="lp-info-grid">
+                                <div class="lp-info-item">
+                                    <span class="lp-info-label">ID</span>
+                                    <span class="lp-info-value" id="lp-conv-id">—</span>
+                                </div>
+                                <div class="lp-info-item">
+                                    <span class="lp-info-label">Status</span>
+                                    <span class="lp-info-value" id="lp-conv-status">—</span>
+                                </div>
+                                <div class="lp-info-item">
+                                    <span class="lp-info-label">Tipo</span>
+                                    <span class="lp-info-value">
+                                        <span class="conv-type-badge" id="lp-type-badge">—</span>
+                                    </span>
+                                </div>
+                                <div class="lp-info-item">
+                                    <span class="lp-info-label">Origem</span>
+                                    <span class="lp-info-value" id="lp-conv-origin">—</span>
+                                </div>
+                                <div class="lp-info-item">
+                                    <span class="lp-info-label">Atribuido a</span>
+                                    <span class="lp-info-value" id="lp-conv-assigned">—</span>
+                                </div>
+                                <div class="lp-info-item">
+                                    <span class="lp-info-label">Criado em</span>
+                                    <span class="lp-info-value" id="lp-conv-created">—</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Eventos da conversa -->
+                        <div class="lp-detail-group">
+                            <div class="lp-section-title">Eventos</div>
+                            <div class="lp-events-list" id="lp-events-list">
+                                <span class="lp-muted">Nenhum evento registrado</span>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -267,7 +289,7 @@
     <div class="panel-header">
         <h2 class="panel-title">Leads</h2>
         <div class="panel-actions">
-            <input type="text" class="search-input" id="leads-search" placeholder="🔍 Buscar por nome, empresa ou telefone..." />
+            <input type="text" class="search-input" id="leads-search" placeholder="🔍 Buscar por nome, empresa ou telefone..." autocomplete="nope" />
             <select class="filter-select" id="leads-filter-origin">
                 <option value="">Todas as origens</option>
                 <option value="form">Formulario</option>
@@ -396,7 +418,7 @@
     <div class="panel-header">
         <h2 class="panel-title">🕓 Historico de Conversas</h2>
         <div class="panel-actions">
-            <input type="text" class="search-input" id="history-search" placeholder="🔍 Buscar nome ou empresa..." />
+            <input type="text" class="search-input" id="history-search" placeholder="🔍 Buscar nome ou empresa..." autocomplete="nope" />
             <select class="filter-select" id="history-filter-status">
                 <option value="">Todos os status</option>
                 <option value="closed">Encerradas</option>

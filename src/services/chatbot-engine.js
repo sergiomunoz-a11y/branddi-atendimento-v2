@@ -25,13 +25,13 @@ import {
 } from './supabase.js';
 import { sendMessage } from './unipile.js';
 import {
-    classifyIntent, extractEntities, isGreeting, isPureGreeting,
+    classifyIntent, extractEntities, isPureGreeting,
     analyzeSentiment, validateDomain, isMediaOnly, getMediaType,
     isFlood, isBusinessHours, generateHandoffSummary, calculatePriority
 } from './chatbot-nlp.js';
 import { findFAQAnswer } from './chatbot-faq.js';
 import { trackBotEvent } from './chatbot-workers.js';
-import { getBotMessage, getMaxRetries, getBrand } from './business-config.js';
+import { getBotMessage, getMaxRetries } from './business-config.js';
 import { isLLMBotAvailable, processLLMBotMessage } from './llm-bot.js';
 import logger from './logger.js';
 
@@ -132,8 +132,22 @@ export async function processChatbotMessage(conversation, text, chatId, attachme
         if (isLLMBotAvailable() && stage !== 'human' && stage !== 'classified') {
             const llmResult = await processLLMBotMessage(conversation, text, chatId, attachments);
             if (llmResult) return; // LLM processou com sucesso
-            // Se retornou null, fallback para state machine abaixo
-            logger.info('LLM bot fallback to state machine', { conversation_id: conversation.id });
+            // LLM falhou — contingência: qualifica com perguntas diretas em vez de IA
+            logger.warn('LLM bot failed, using qualification fallback', { conversation_id: conversation.id, stage });
+            const leadName = conversation.leads?.name?.split(' ')[0] || '';
+            const fallbackMsg =
+                `Olá${leadName ? `, ${leadName}` : ''}! 👋 Obrigado por entrar em contato com a *Branddi*.\n\n` +
+                `Para direcionar você ao time certo, me conta:\n\n` +
+                `1️⃣  Quero conhecer os serviços da Branddi\n` +
+                `2️⃣  Recebi uma notificação da Branddi\n` +
+                `3️⃣  Sou cliente e tenho uma dúvida`;
+            await sendBotMsg(chatId, conversation.id, fallbackMsg);
+            // Volta ao state machine clássico para processar a resposta
+            await updateConversation(conversation.id, {
+                chatbot_stage: 'qualifying',
+                chatbot_answers: { ...answers, _llm_fallback: true },
+            });
+            return;
         }
 
         // ── Stage-specific processing (fallback se LLM não disponível) ──
@@ -494,8 +508,10 @@ async function _finalizeClassification(conversation, answers, classification, ch
         status:          'in_progress',
     });
 
-    // Envia mensagem de classificação
-    await sendBotMsg(chatId, conversation.id, FLOW.classified.message(classification));
+    // Envia mensagem de classificação (pula se LLM já classificou e enviou msg)
+    if (!answers._classified_by || answers._classified_by !== 'llm') {
+        await sendBotMsg(chatId, conversation.id, FLOW.classified.message(classification));
+    }
 
     // Gera e envia handoff summary (mensagem interna para o atendente)
     const summary = generateHandoffSummary(answers, conversation.leads, sentiment);
@@ -619,7 +635,9 @@ function _buildRoutingReason(answers, sentiment) {
 
 async function sendBotMsg(chatId, conversationId, text) {
     try {
-        await sendMessage(chatId, text);
+        const result = await sendMessage(chatId, text);
+        // Usa o message_id REAL retornado pela Unipile para dedup correto no polling
+        const realMsgId = result?.message_id || result?.id || `bot_${Date.now()}_${Math.random().toString(36).slice(2)}`;
         const { saveMessage } = await import('./supabase.js');
         await saveMessage({
             conversation_id:    conversationId,
@@ -628,7 +646,7 @@ async function sendBotMsg(chatId, conversationId, text) {
             sender_name:        'Bot Branddi',
             content:            text,
             attachments:        [],
-            unipile_message_id: `bot_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            unipile_message_id: realMsgId,
         });
     } catch (err) {
         logger.error('Erro enviando mensagem bot', { error: err.message });
@@ -656,6 +674,11 @@ async function _saveInternalNote(conversationId, text) {
 
 export async function triggerWelcome(conversationId, chatId, leadName) {
     try {
+        // Se LLM está ativo, não envia welcome — LLM responderá na 1ª mensagem inbound
+        if (isLLMBotAvailable()) {
+            logger.info('triggerWelcome skipped (LLM active)', { conversation_id: conversationId });
+            return;
+        }
         const hours = isBusinessHours();
         let msg;
         if (!hours.active) {

@@ -1,0 +1,1395 @@
+/* ================================================================
+   Branddi Atendimento — Redesign v2 (Remix-based)
+   ================================================================
+   Este arquivo sobrescreve style.css quando incluido DEPOIS no HTML.
+   ROLLBACK: comentar a tag <link> em index.html para desativar.
+   Nenhum JS deve depender deste arquivo.
+   ================================================================ */
+
+/* ─── SPRINT 1 — Design tokens + typography ───────────────── */
+:root {
+    /* Backgrounds — 6 tons distintos, cada zona tem identidade */
+    --bg-deep:       #0f1923;
+    --bg-base:       #0f1923;
+    --bg-nav:        rgba(8, 18, 28, 0.85);
+    --bg-surface:    #152130;
+    --bg-convlist:   #152130;
+    --bg-chat:       #111c28;
+    --bg-panel:      #19293a;
+    --bg-input:      #1a2a3a;
+    --bg-card:       #1e3044;
+    --bg-card-hover: #243a50;
+    --bg-hover:      #243a50;
+    --bg-active:     #1e3248;
+    --bg-elevated:   #1e3248;
+
+    /* Accent family */
+    --accent:       #00E5FF;
+    --accent-dim:   rgba(0, 229, 255, 0.12);
+    --accent-soft:  rgba(0, 229, 255, 0.08);
+    --accent-mid:   rgba(0, 229, 255, 0.22);
+    --accent-glow:  rgba(0, 229, 255, 0.06);
+    --border-accent: rgba(0, 229, 255, 0.3);
+
+    /* Secondary palette */
+    --teal:         #4BBECD;
+    --amber:        #F5A623;
+    --amber-dim:    rgba(245, 166, 35, 0.12);
+    --amber-soft:   rgba(245, 166, 35, 0.1);
+    --red:          #FF5C5C;
+    --red-dim:      rgba(255, 92, 92, 0.12);
+    --red-soft:     rgba(255, 92, 92, 0.1);
+    --green:        #34D399;
+    --green-dim:    rgba(52, 211, 153, 0.12);
+    --green-soft:   rgba(52, 211, 153, 0.1);
+    --purple:       #A78BFA;
+    --purple-dim:   rgba(167, 139, 250, 0.1);
+
+    /* Text */
+    --text-1:         #ECF2F8;
+    --text-primary:   #ECF2F8;
+    --text-2:         #8DA4B8;
+    --text-secondary: #8DA4B8;
+    --text-3:         #546A7B;
+    --text-muted:     #546A7B;
+
+    /* Borders */
+    --border:        rgba(255, 255, 255, 0.06);
+    --border-md:     rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --border-hover:  rgba(255, 255, 255, 0.18);
+    --glass:         rgba(255, 255, 255, 0.03);
+
+    /* Radius — levemente mais suave */
+    --radius:    10px;
+    --radius-sm: 7px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+
+    /* Shadows mais profundas para hierarquia */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+    --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+    /* Typography — DM Sans com fallback Inter */
+    --font: 'DM Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Base tweaks ──────────────────────────────────────────── */
+body {
+    font-family: var(--font);
+    background: var(--bg-base);
+    color: var(--text-1);
+    font-feature-settings: 'ss01', 'cv11';
+    letter-spacing: -0.005em;
+}
+
+/* Scrollbar refinado */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* ─── Animations — library ────────────────────────────────── */
+@keyframes v2-fadeUp   { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes v2-fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v2-slideIn  { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@keyframes v2-scaleIn  { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes v2-pulse    { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes v2-glow     { 0%, 100% { box-shadow: 0 0 6px var(--accent); } 50% { box-shadow: 0 0 14px var(--accent); } }
+
+/* Sobrescrever animações antigas para usarem novos keyframes */
+.conv-item    { animation: v2-slideIn 0.2s ease both; }
+.msg-bubble   { animation: v2-fadeUp 0.2s ease both; }
+.script-card  { animation: v2-fadeUp 0.25s ease both; }
+.kpi-card     { animation: v2-fadeUp 0.3s ease both; }
+
+/* ─── Glass utility ───────────────────────────────────────── */
+.glass {
+    background: var(--glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+/* ================================================================
+   SPRINT 2 — Nav lateral compacta 66px + tooltips
+   ================================================================ */
+.side-nav {
+    width: 66px;
+    background: var(--bg-nav);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border-strong);
+    padding: 14px 0;
+    align-items: center;
+    z-index: 100;
+}
+
+.side-nav-brand {
+    margin-bottom: 26px;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    color: var(--text-1);
+}
+.side-nav-brand svg { width: 30px; height: 30px; }
+
+.side-nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    width: 100%;
+    align-items: center;
+    padding: 0;
+}
+
+.side-nav-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    padding: 0 0 6px;
+    border-top: none;
+}
+
+/* Nav buttons — 44x44 icon-only, com tooltip via ::after */
+.nav-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    position: relative;
+    transition: all 0.2s var(--ease);
+    flex-shrink: 0;
+}
+.nav-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-1);
+}
+.nav-btn.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+
+/* Esconder label expandido, manter acessibilidade */
+.nav-btn .nav-label { display: none; }
+.nav-btn .nav-icon { width: auto; height: auto; font-size: 0; }
+.nav-btn .nav-icon .icon { width: 21px; height: 21px; }
+
+/* Badge — dot no canto superior direito */
+.nav-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 1px 5px;
+    background: var(--accent);
+    color: #0a1a28;
+    font-size: 9px;
+    font-weight: 800;
+    border-radius: 10px;
+    line-height: 14px;
+    text-align: center;
+    box-shadow: 0 0 6px var(--accent);
+    display: none;
+}
+.nav-badge.show { display: inline-block; }
+
+/* Tooltip via title (mantém semântica do HTML atual) */
+.nav-btn[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-md);
+    color: var(--text-1);
+    padding: 5px 11px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 300;
+    pointer-events: none;
+    animation: v2-fadeIn 0.12s ease both;
+}
+
+/* Status dot no bottom */
+.side-status {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: v2-glow 3s ease infinite;
+}
+.status-dot.offline {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    animation: v2-pulse 1s ease infinite;
+}
+
+/* Usuário logado — avatar compacto */
+.side-nav-user {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+}
+.side-nav-user .user-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #0090ff);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    letter-spacing: -0.02em;
+    margin-bottom: 2px;
+}
+.side-nav-user .user-role-dot { display: none; }
+.side-nav-user .btn-logout {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-3);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s var(--ease);
+}
+.side-nav-user .btn-logout:hover {
+    background: rgba(255, 92, 92, 0.1);
+    color: var(--red);
+}
+.side-nav-user .btn-logout .icon { width: 14px; height: 14px; }
+
+/* App layout — libera espaço horizontal */
+.app-layout {
+    left: 66px;
+    width: calc(100% - 66px);
+}
+
+/* ================================================================
+   SPRINT 3 — Chat area (pattern, watermark, bubbles, input)
+   ================================================================ */
+
+/* Chat container — fundo escuro distinto do panel */
+.chat-area {
+    background: var(--bg-chat);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Pattern radial (sobrescreve url() antigo por grid de pontos vetorial) */
+.chat-area::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle at 20px 20px, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+    background-size: 32px 32px;
+    opacity: 0.02;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Watermark BrandMark SVG centralizado no chat */
+.chat-area::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 440px;
+    height: 440px;
+    margin: auto;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 135 203' fill='none'><path d='M71.37 118.33L58.03 104.94c-.84 2.83-2.34 5.39-4.4 7.46L14.13 152.06a4.46 4.46 0 000 6.38l29.82 29.94 26.1-26.3c12.17-13.12 13.94-31.08 1.32-43.78v.03z' fill='%234bbecd'/><path d='M116.74 70.64L50.03 3.7A12.85 12.85 0 0041.16 0c-3.36 0-6.5 1.32-8.87 3.7L3.64 32.55c-4.85 4.9-4.85 12.88 0 17.78l35.36 35.6 6.87 6.92a7.96 7.96 0 01-.09 10.93L6.28 146.43a12.75 12.75 0 000 17.81l37.61 37.76 30.99-31.11 41.86-42.03c15.98-16.04 15.98-42.15 0-58.19v-.03zM70.05 162.11l-26.1 26.3-29.82-29.94a4.46 4.46 0 010-6.38l39.5-39.65c2.07-2.08 3.57-4.63 4.4-7.46l13.34 13.39c12.62 12.67 10.85 30.66-1.32 43.78v-.04zm39.95-40.02L89.83 142.34c.18-11.82-4.35-23.23-12.83-31.74L52.76 86.26 10.38 43.6a3.56 3.56 0 010-4.27L39.03 10.47a3.05 3.05 0 014.26 0l66.71 66.97c12.26 12.31 12.26 32.35 0 44.65z' fill='%23ecf2f8'/></svg>");
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.chat-header,
+.messages-wrap,
+.chat-input-wrap,
+.chat-placeholder { z-index: 1; position: relative; }
+
+/* Chat placeholder — empty state elegante */
+.chat-placeholder {
+    flex: 1;
+    gap: 14px;
+}
+.placeholder-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    background: var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0;
+    opacity: 1;
+}
+.placeholder-icon::before {
+    content: "";
+    width: 36px;
+    height: 36px;
+    background: currentColor;
+    color: var(--accent);
+    opacity: 0.7;
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg>") center/contain no-repeat;
+            mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/></svg>") center/contain no-repeat;
+}
+.chat-placeholder h3 { font-size: 16px; color: var(--text-2); font-weight: 600; }
+.chat-placeholder p { color: var(--text-3); max-width: 240px; line-height: 1.6; }
+
+/* Chat header elevado */
+.chat-header {
+    padding: 12px 18px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-strong);
+}
+.chat-avatar {
+    background: linear-gradient(135deg, var(--accent), #0090ff);
+    border: none;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);
+}
+.chat-meta-name { letter-spacing: -0.01em; }
+
+/* Messages area */
+.messages-wrap {
+    padding: 18px 20px;
+    gap: 8px;
+}
+
+/* Bubbles — radius maior e animação fadeUp */
+.msg-bubble {
+    max-width: 68%;
+    border-radius: 16px;
+    padding: 11px 14px;
+    box-shadow: none;
+    animation: v2-fadeUp 0.2s ease both;
+}
+.msg-bubble.inbound {
+    background: var(--bg-elevated);
+    border-top-left-radius: 4px;
+}
+.msg-bubble.outbound {
+    background: linear-gradient(135deg, #00564a, #004d42);
+    border-top-right-radius: 4px;
+}
+.msg-bubble.bot {
+    background: var(--purple-dim);
+    border: none;
+    border-top-left-radius: 4px;
+}
+.msg-bubble.bot .msg-sender { color: var(--purple); }
+.msg-bubble.note {
+    background: var(--amber-dim);
+    border: 1px dashed rgba(245, 166, 35, 0.25);
+    max-width: 80%;
+}
+
+.msg-text {
+    font-size: 13.5px;
+    line-height: 1.6;
+}
+.msg-time { font-size: 10px; color: rgba(255, 255, 255, 0.3); }
+.msg-sender { font-size: 10.5px; font-weight: 600; }
+
+/* Chat input wrap */
+.chat-input-wrap {
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-strong);
+    padding: 8px 14px 16px;
+}
+
+/* Tabs Mensagem/Anotações */
+.chat-input-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 8px;
+    padding: 6px 0 0;
+}
+.chat-input-tab {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font);
+    color: var(--text-3);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.chat-input-tab:hover { color: var(--text-2); }
+.chat-input-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* Toolbar — botão scripts outline pill */
+.chat-input-toolbar { margin-bottom: 8px; }
+.scripts-trigger {
+    padding: 6px 13px;
+    background: transparent;
+    border: 1px solid var(--border-md);
+    color: var(--text-2);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 12px;
+    gap: 5px;
+}
+.scripts-trigger:hover {
+    border-color: var(--border-hover);
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.03);
+}
+.scripts-menu {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+}
+.scripts-menu-item:hover { background: var(--bg-card-hover); }
+
+/* Input textarea + send button */
+.chat-input-row { gap: 8px; align-items: flex-end; }
+.chat-input-row textarea,
+#chat-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius);
+    color: var(--text-1);
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 9px 14px;
+    line-height: 1.5;
+    transition: border 0.2s var(--ease);
+}
+.chat-input-row textarea:focus,
+#chat-input:focus {
+    border-color: var(--accent-mid);
+    outline: none;
+}
+
+/* Attach button refinado */
+.attach-btn {
+    width: 38px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    color: var(--text-3);
+    background: transparent;
+}
+.attach-btn:hover {
+    color: var(--accent);
+    background: var(--accent-dim);
+}
+
+/* Send button — gradient + glow */
+.chat-input-row .btn-send,
+.chat-input-row button[type="submit"],
+#btn-send {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius);
+    border: none;
+    background: linear-gradient(135deg, var(--accent), #0090ff);
+    color: #fff;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0, 229, 255, 0.25);
+    transition: transform 0.15s var(--ease);
+}
+#btn-send:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0, 229, 255, 0.35); }
+#btn-send:active { transform: translateY(0); }
+
+/* ================================================================
+   SPRINT 4 — Conv list + filtros pills
+   ================================================================ */
+
+/* Sidebar — cor própria distinta do chat */
+.inbox-sidebar {
+    background: var(--bg-convlist);
+    border-right: 1px solid var(--border-strong);
+}
+
+.sidebar-header {
+    padding: 16px 14px 10px;
+    background: transparent;
+    border-bottom: none;
+}
+.sidebar-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+}
+
+/* Filter dropdown trigger — pill outline */
+.filter-dropdown-trigger {
+    padding: 5px 8px;
+    background: transparent;
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    transition: all 0.15s var(--ease);
+}
+.filter-dropdown-trigger:hover {
+    border-color: var(--border-hover);
+    color: var(--accent);
+}
+.filter-active-dot {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+.filter-dropdown-menu {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 12px;
+}
+
+/* Type tabs — segmented control dentro do menu */
+.inbox-type-tabs {
+    display: flex;
+    gap: 3px;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 3px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+.type-tab {
+    flex: 1;
+    padding: 5px 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--text-3);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.type-tab:hover { color: var(--text-2); background: transparent; }
+.type-tab.active {
+    background: var(--bg-elevated);
+    color: var(--accent);
+    box-shadow: none;
+}
+
+/* Status chips — pills outline */
+.sidebar-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+.filter-chip {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.filter-chip:hover { border-color: var(--border-hover); color: var(--text-2); }
+.filter-chip.active {
+    background: var(--accent-dim);
+    border-color: var(--accent-mid);
+    color: var(--accent);
+}
+
+/* Search — input com ícone implícito */
+.sidebar-search {
+    background: var(--bg-input);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-1);
+    font-size: 12px;
+    padding: 7px 10px;
+}
+.sidebar-search:focus { border-color: var(--accent-mid); }
+.sidebar-search::placeholder { color: var(--text-3); }
+
+/* Conversation list */
+.conversation-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 8px;
+}
+
+/* Conv item — card com avatar + nome/hora + pills */
+.conv-item {
+    padding: 12px 14px;
+    margin: 2px 8px;
+    border-radius: var(--radius);
+    border-left: none;
+    background: transparent;
+    transition: all 0.15s var(--ease);
+}
+.conv-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+.conv-item.active {
+    background: var(--accent-dim);
+    border-left: none;
+    outline: 1.5px solid var(--accent-mid);
+    outline-offset: -1.5px;
+}
+.conv-item.unread {
+    background: transparent;
+    border-left: none;
+}
+.conv-item.unread .conv-name { color: var(--text-1); font-weight: 700; }
+.conv-item.unread .conv-time { color: var(--accent); }
+
+.conv-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    letter-spacing: -0.01em;
+    color: var(--text-1);
+}
+.conv-time { font-size: 11px; color: var(--text-3); font-weight: 400; }
+.conv-company { font-size: 11.5px; color: var(--text-2); margin-bottom: 3px; font-weight: 500; }
+.conv-preview { font-size: 12px; color: var(--text-3); line-height: 18px; }
+
+/* Tags/pills dentro do conv-item */
+.conv-tags { gap: 4px; margin-top: 7px; align-items: center; }
+.tag {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.tag-comercial { background: var(--accent-dim); color: var(--accent); }
+.tag-opec { background: var(--amber-dim); color: var(--amber); }
+.tag-form { background: var(--purple-dim); color: var(--purple); }
+.tag-wa { background: var(--green-dim); color: var(--green); }
+.tag-waiting { background: var(--purple-dim); color: var(--purple); }
+.tag-unclassified { background: rgba(255, 255, 255, 0.06); color: var(--text-3); }
+.tag-unread {
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-weight: 700;
+}
+
+/* Conv type badge (dentro de lead panel details) */
+.conv-type-badge { padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.conv-type-badge.inbound { background: var(--accent-dim); color: var(--accent); }
+.conv-type-badge.prospecting { background: var(--green-dim); color: var(--green); }
+
+/* ================================================================
+   SPRINT 5 — Lead panel colapsável
+   ================================================================ */
+
+/* Botão toggle no chat header */
+.btn-toggle-lead-panel {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.btn-toggle-lead-panel:hover {
+    border-color: var(--border-hover);
+    color: var(--text-1);
+}
+.btn-toggle-lead-panel.active {
+    background: var(--accent-dim);
+    border-color: var(--accent-mid);
+    color: var(--accent);
+}
+.btn-toggle-lead-panel .icon { width: 15px; height: 15px; }
+
+/* Quando lead-panel-hidden, esconde painel e o grid se ajusta */
+.inbox-layout.lead-panel-hidden .lead-panel {
+    display: none !important;
+}
+.inbox-layout.lead-panel-hidden {
+    grid-template-columns: 290px 1fr !important;
+}
+/* Estado default: painel visível com 330px */
+.inbox-layout { grid-template-columns: 290px 1fr 330px; }
+
+/* Lead panel — background distinto, borda forte à esquerda */
+.lead-panel {
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border-strong);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header do lead panel — avatar grande + gradiente */
+.lp-contact-header {
+    padding: 22px 16px 16px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-md);
+    background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-panel) 100%);
+}
+.lp-contact-header .lp-avatar {
+    width: 54px;
+    height: 54px;
+    font-size: 20px;
+    background: linear-gradient(135deg, var(--accent), #0090ff);
+    color: #fff;
+    font-weight: 700;
+    border: none;
+    margin: 0 auto 10px;
+    box-shadow: 0 4px 14px rgba(0, 229, 255, 0.25);
+}
+.lp-contact-header .lp-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 3px; }
+.lp-contact-header .lp-phone { font-size: 12px; color: var(--text-3); margin-bottom: 3px; }
+.lp-contact-header .lp-company { font-size: 12px; color: var(--accent); font-weight: 500; }
+
+.lp-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-md);
+}
+.lp-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-3);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.lp-section-title .icon { color: var(--accent); opacity: 0.7; }
+
+/* Card de deal selecionado — destaque accent */
+.lp-selected-deal-info,
+#lp-deal-picker .deal-picker-list .deal-row.active {
+    background: var(--accent-dim);
+    border: 1.5px solid var(--accent-mid);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+}
+
+/* Labels/tags como pills arredondadas */
+.lp-tag {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1.5px solid transparent;
+}
+
+/* Collapse body com animação */
+.lp-collapsible .lp-collapse-toggle {
+    width: 100%;
+    padding: 11px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: 0.3px;
+    text-transform: none;
+    font-family: var(--font);
+}
+.lp-collapsible.open .lp-collapse-toggle { color: var(--text-2); }
+.lp-collapse-chevron { transition: transform 0.2s var(--ease); }
+.lp-collapsible.open .lp-collapse-chevron { transform: rotate(90deg); }
+.lp-collapse-body { padding: 0 16px 14px; animation: v2-fadeUp 0.15s ease; }
+
+/* Info grid com dividers sutis */
+.lp-info-item {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+}
+.lp-info-item:last-child { border-bottom: none; }
+.lp-info-label { font-size: 12px; color: var(--text-3); }
+.lp-info-value { font-size: 12px; color: var(--text-2); font-weight: 500; }
+
+/* ================================================================
+   SPRINT 6 — Scripts / Histórico / Leads / Dashboard
+   ================================================================ */
+
+/* ─── Panel headers ────────────────────────────────────────── */
+.panel-header {
+    padding: 18px 22px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-strong);
+    flex-shrink: 0;
+}
+.panel-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+    margin: 0;
+}
+
+/* ─── Inputs & selects ────────────────────────────────────── */
+.search-input,
+.filter-select,
+.deals-search-input,
+.settings-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-1);
+    font-family: var(--font);
+    font-size: 13px;
+    transition: border 0.2s var(--ease);
+}
+.search-input { padding: 7px 13px; width: 260px; }
+.filter-select { padding: 6px 10px; font-size: 12px; color: var(--text-2); cursor: pointer; }
+.search-input:focus,
+.filter-select:focus,
+.deals-search-input:focus,
+.settings-input:focus { outline: none; border-color: var(--accent-mid); color: var(--text-1); }
+
+/* ─── Buttons ──────────────────────────────────────────────── */
+.btn-primary {
+    padding: 7px 14px;
+    background: var(--accent);
+    color: #0a1a28;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s var(--ease);
+}
+.btn-primary:hover { background: #00f0ff; box-shadow: 0 4px 12px rgba(0, 229, 255, 0.3); }
+.btn-outline,
+.btn-secondary,
+.btn-sm.btn-outline {
+    padding: 6px 13px;
+    background: transparent;
+    color: var(--text-2);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s var(--ease);
+}
+.btn-outline:hover,
+.btn-secondary:hover,
+.btn-sm.btn-outline:hover {
+    border-color: var(--border-hover);
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* ─── Leads / Histórico table ──────────────────────────────── */
+.leads-table-wrap { padding: 0 22px 22px; }
+.leads-table { margin-top: 12px; }
+.leads-table th {
+    padding: 10px 14px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-3);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-md);
+    background: var(--bg-panel);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.leads-table td {
+    padding: 11px 14px;
+    font-size: 13px;
+    color: var(--text-2);
+    border-bottom: 1px solid var(--border);
+}
+.leads-table tr { transition: background 0.12s var(--ease); }
+.leads-table tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-1);
+}
+.crm-synced { color: var(--green); font-size: 11px; font-weight: 600; }
+.crm-pending { color: var(--text-3); font-size: 11px; }
+
+/* ─── KPI cards ────────────────────────────────────────────── */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    padding: 22px;
+}
+.kpi-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-lg);
+    padding: 18px 16px;
+    transition: all 0.15s var(--ease);
+}
+.kpi-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+.kpi-card.kpi-green  { border-top: 2px solid var(--accent); }
+.kpi-card.kpi-amber  { border-top: 2px solid var(--amber); }
+.kpi-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-3);
+    margin-bottom: 8px;
+}
+.kpi-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text-1);
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.02em;
+}
+.kpi-card.kpi-green .kpi-value { color: var(--accent); }
+.kpi-card.kpi-amber .kpi-value { color: var(--amber); }
+.kpi-sub { font-size: 12px; color: var(--text-3); }
+
+/* ─── Charts ───────────────────────────────────────────────── */
+.charts-grid { gap: 14px; padding: 0 22px 22px; }
+.chart-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+}
+.chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 16px;
+}
+
+/* ─── Scripts categories & grid ────────────────────────────── */
+.scripts-categories {
+    display: flex;
+    gap: 6px;
+    padding: 12px 22px;
+    border-bottom: 1px solid var(--border-md);
+    flex-wrap: wrap;
+}
+.script-cat-btn {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-3);
+    font-family: var(--font);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.script-cat-btn:hover { border-color: var(--border-hover); color: var(--text-2); }
+.script-cat-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent-mid);
+    color: var(--accent);
+}
+
+.scripts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 14px;
+    padding: 22px;
+    align-content: start;
+}
+.script-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    transition: all 0.15s var(--ease);
+    animation: v2-fadeUp 0.2s ease both;
+}
+.script-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+.script-card.script-private {
+    border-left: 3px solid var(--purple);
+}
+.script-card .script-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-1);
+    margin-bottom: 7px;
+}
+.script-card .script-category {
+    display: inline-flex;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-2);
+}
+.script-card .script-content {
+    font-size: 12.5px;
+    color: var(--text-2);
+    line-height: 1.65;
+    margin-top: 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ─── Deals search page ────────────────────────────────────── */
+.deals-search-wrap { padding: 24px; max-width: 680px; margin: 0 auto; width: 100%; }
+.deals-search-input {
+    padding: 13px 18px;
+    font-size: 14.5px;
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--border-md);
+    width: 100%;
+}
+
+/* ================================================================
+   SPRINT 7 — Modais com backdrop-blur
+   ================================================================ */
+
+/* Overlay — blur + darker scrim */
+.modal-overlay {
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1000;
+    animation: v2-fadeIn 0.15s ease;
+}
+
+/* Modal box — radius-xl + heavy shadow + scale-in */
+.modal,
+.modal-box {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    animation: v2-scaleIn 0.2s ease;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Modal header refinado */
+.modal-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-md);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-header h3 {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-1);
+    margin: 0;
+}
+.modal-close {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--bg-card-hover);
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    padding: 0;
+    transition: all 0.15s var(--ease);
+}
+.modal-close:hover {
+    color: var(--text-1);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-body { padding: 22px; overflow-y: auto; flex: 1; min-height: 0; }
+.modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid var(--border-md);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 0;
+    flex-shrink: 0;
+}
+
+/* Settings modal — tab-panel precisa se comportar como flex container
+   para que modal-body role e modal-footer fique fixo no bottom */
+.modal .settings-tab-panel {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+.modal .settings-tab-panel.active { display: flex; }
+.modal .settings-tab-panel > .modal-body {
+    max-height: none !important;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+.modal .settings-tab-panel > .modal-footer { flex-shrink: 0; }
+
+/* Settings tabs */
+.settings-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 22px;
+    border-bottom: 1px solid var(--border-md);
+}
+.settings-tab {
+    padding: 10px 14px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-3);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.settings-tab:hover { color: var(--text-2); }
+.settings-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* Settings section titles */
+.settings-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-1);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.settings-section {
+    margin-bottom: 24px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+}
+.settings-section:last-child { border-bottom: none; }
+
+.form-group label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-3);
+    display: block;
+    margin-bottom: 5px;
+}
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select,
+.form-group textarea {
+    background: var(--bg-input);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-1);
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 8px 12px;
+    width: 100%;
+    transition: border 0.2s var(--ease);
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent-mid);
+}
+
+/* WhatsApp QR modal — status card */
+#wa-current-status {
+    background: var(--bg-input) !important;
+    border-radius: var(--radius) !important;
+    border: 1px solid var(--border-md);
+}
+
+/* ================================================================
+   SPRINT 9 — QA, responsivo, polish final
+   ================================================================ */
+
+/* Selection harmonizado com accent */
+::selection { background: var(--accent-mid); color: var(--text-1); }
+
+/* Focus-visible global consistente */
+:focus-visible {
+    outline: 2px solid var(--accent-mid);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* ─── Tablet (≤1024px) ────────────────────────────────────── */
+@media (max-width: 1024px) {
+    .inbox-layout { grid-template-columns: 290px 1fr; }
+    .inbox-layout .lead-panel { display: none; }
+    .btn-toggle-lead-panel { display: none; }
+    .chat-area::after { width: 160px; height: 160px; }
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ─── Mobile (≤768px) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+    .side-nav { width: 56px; padding: 12px 0; }
+    .nav-btn { width: 40px; height: 40px; }
+    .nav-btn .nav-icon .icon { width: 19px; height: 19px; }
+    .side-nav-brand svg { width: 26px; height: 26px; }
+    .app-layout { left: 56px; width: calc(100% - 56px); }
+
+    /* Tooltips escondidos no mobile (touch) */
+    .nav-btn[title]:hover::after { display: none; }
+
+    .inbox-layout,
+    .inbox-layout.lead-panel-hidden { grid-template-columns: 1fr !important; }
+    .inbox-sidebar { background: var(--bg-convlist); }
+
+    .chat-area::after { width: 120px; height: 120px; opacity: 0.03; }
+    .messages-wrap { padding: 14px 12px; }
+    .msg-bubble { max-width: 82%; }
+    .chat-input-wrap { padding: 6px 10px 12px; }
+
+    .panel-header {
+        padding: 14px 16px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .panel-title { font-size: 16px; }
+    .panel-actions { flex-wrap: wrap; gap: 6px; width: 100%; }
+    .panel-actions .search-input,
+    .panel-actions .filter-select { width: 100%; min-width: 0; }
+
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 14px; }
+    .kpi-value { font-size: 22px; }
+    .charts-grid { grid-template-columns: 1fr; padding: 0 14px 14px; }
+    .scripts-grid { grid-template-columns: 1fr; padding: 14px; }
+    .leads-table-wrap { padding: 0 12px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .leads-table th, .leads-table td { padding: 8px 10px; }
+
+    .modal,
+    .modal-box {
+        max-width: 95vw !important;
+        max-height: 90vh;
+        margin: 8px;
+    }
+    .modal-body { padding: 16px; }
+    .modal-header { padding: 14px 16px; }
+
+    .deals-search-wrap { padding: 16px; }
+}
+
+/* ─── Small mobile (≤480px) ───────────────────────────────── */
+@media (max-width: 480px) {
+    .side-nav { display: none; }
+    .app-layout { left: 0; width: 100%; }
+    .kpi-grid { grid-template-columns: 1fr; }
+    .lp-contact-header { padding: 16px 14px 12px; }
+    .lp-contact-header .lp-avatar { width: 48px; height: 48px; font-size: 18px; }
+    .chat-avatar { width: 34px; height: 34px; font-size: 14px; }
+    .btn-toggle-lead-panel { display: none; }
+}
+
+/* ─── Reduce motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ─── Print (caso usuário imprima transcrição) ────────────── */
+@media print {
+    .side-nav, .lead-panel, .chat-input-wrap, .modal-overlay { display: none !important; }
+    .chat-area::before, .chat-area::after { display: none !important; }
+    body { background: #fff; color: #000; }
+    .msg-bubble { break-inside: avoid; border: 1px solid #ccc; }
+}
+
+/* ─── High DPI refinements ────────────────────────────────── */
+@media (min-resolution: 2dppx) {
+    .chat-area::before { background-size: 30px 30px; }
+}

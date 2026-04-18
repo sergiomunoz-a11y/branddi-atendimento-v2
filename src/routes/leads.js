@@ -13,6 +13,7 @@ import {
 } from '../services/pipedrive.js';
 import { validate } from '../middleware/validate.js';
 import supabase from '../services/supabase.js';
+import logger from '../services/logger.js';
 
 const router = Router();
 
@@ -202,7 +203,7 @@ router.post('/leads/:id/sync-crm', async (req, res) => {
                 : `Deal #${deal.id} criado no funil Inbound SDR!`,
         });
     } catch (err) {
-        console.error('[sync-crm]', err.message);
+        logger.error('Sync CRM error', { error: err.message });
         res.status(500).json({ error: err.message });
     }
 });
@@ -244,6 +245,7 @@ router.get('/leads/:id/deals', async (req, res) => {
 
         const allDeals = [];
         const persons = [];
+        const stageCache = new Map(); // Cache de stages para evitar N+1
 
         const labelOptions = getPersonLabelOptions();
 
@@ -267,13 +269,18 @@ router.get('/leads/:id/deals', async (req, res) => {
             });
 
             for (const d of deals) {
-                // Busca nome do stage
+                // Busca nome do stage com cache local (evita N+1)
                 let stage_name = '—';
                 if (d.stage_id) {
-                    try {
-                        const stageData = await pdGet(`/stages/${d.stage_id}`);
-                        stage_name = stageData?.data?.name || '—';
-                    } catch { /* ignora */ }
+                    if (stageCache.has(d.stage_id)) {
+                        stage_name = stageCache.get(d.stage_id);
+                    } else {
+                        try {
+                            const stageData = await pdGet(`/stages/${d.stage_id}`);
+                            stage_name = stageData?.data?.name || '—';
+                            stageCache.set(d.stage_id, stage_name);
+                        } catch { /* ignora */ }
+                    }
                 }
 
                 allDeals.push({
@@ -326,11 +333,7 @@ router.get('/leads/:id/deal', async (req, res) => {
         const lead = await getLeadById(req.params.id);
         if (!lead?.crm_deal_id) return res.json({ deal: null });
 
-        const base  = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
-        const token = process.env.PIPEDRIVE_API_TOKEN;
-
-        const r = await fetch(`${base}/deals/${lead.crm_deal_id}?api_token=${token}`);
-        const data = await r.json();
+        const data = await pdGet(`/deals/${lead.crm_deal_id}`);
 
         // Deal não encontrado ou deletado
         if (!data?.data || data.data.status === 'deleted') return res.json({ deal: null });
@@ -341,8 +344,7 @@ router.get('/leads/:id/deal', async (req, res) => {
         let stage_name = '—';
         if (d.stage_id) {
             try {
-                const sr = await fetch(`${base}/stages/${d.stage_id}?api_token=${token}`);
-                const sd = await sr.json();
+                const sd = await pdGet(`/stages/${d.stage_id}`);
                 stage_name = sd?.data?.name || '—';
             } catch { /* ignora */ }
         }
@@ -392,18 +394,13 @@ router.post('/leads/:id/notes', async (req, res) => {
         const apiToken = await getUserPipedriveToken(req.user?.id);
         const dateStr = new Date().toLocaleDateString('pt-BR');
 
-        // Cria Note no Pipedrive (não Activity)
-        const base = `https://${process.env.PIPEDRIVE_DOMAIN}/api/v1`;
-        const noteRes = await fetch(`${base}/notes?api_token=${apiToken}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                content: `<b>📱 Transcrição WhatsApp — ${lead.name || lead.phone} — ${dateStr}</b><br><br><pre>${transcript || '(sem mensagens)'}</pre><br><small>Gerado via Branddi Atendimento</small>`,
-                deal_id: parseInt(targetDealId),
-                pinned_to_deal_flag: 0,
-            }),
-        });
-        const noteData = await noteRes.json();
+        // Cria Note no Pipedrive via helper centralizado
+        const { pdPost } = await import('../services/pipedrive.js');
+        const noteData = await pdPost('/notes', {
+            content: `<b>📱 Transcrição WhatsApp — ${lead.name || lead.phone} — ${dateStr}</b><br><br><pre>${transcript || '(sem mensagens)'}</pre><br><small>Gerado via Branddi Atendimento</small>`,
+            deal_id: parseInt(targetDealId),
+            pinned_to_deal_flag: 0,
+        }, apiToken);
 
         res.json({ ok: true, deal_id: targetDealId, note_id: noteData?.data?.id });
     } catch (err) {

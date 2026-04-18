@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import {
-    getInbox, updateConversation, createRoutingEvent, updateLead, getDashboardStats
+    getInbox, updateConversation, createRoutingEvent, getDashboardStats
 } from '../services/supabase.js';
 import { queueConversationSync } from '../services/crm-sync.js';
 
