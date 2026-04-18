@@ -5,56 +5,154 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Branddi Atendimento — Login</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #001F2B; --surface: #002B36; --border: rgba(0,229,255,.1);
-      --accent: #00E5FF; --accent2: #00B8D4; --text: #E8F1F5;
-      --muted: #5C7A88; --red: #f85149; --radius: 12px;
+      --bg-base: #0f1923;
+      --bg-elevated: #1e3248;
+      --bg-input: #1a2a3a;
+      --accent: #00E5FF;
+      --accent-dim: rgba(0, 229, 255, 0.12);
+      --accent-mid: rgba(0, 229, 255, 0.22);
+      --text-1: #ECF2F8;
+      --text-2: #8DA4B8;
+      --text-3: #546A7B;
+      --border-md: rgba(255, 255, 255, 0.10);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --red: #ff5c5c;
+      --radius: 10px;
+      --radius-sm: 7px;
+      --radius-xl: 18px;
+      --font: 'DM Sans', 'Inter', system-ui, sans-serif;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
-    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text);
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      background-image: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(0,229,255,.1) 0%, transparent 60%);
+    body {
+      font-family: var(--font);
+      background: var(--bg-base);
+      color: var(--text-1);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 229, 255, 0.08) 0%, transparent 60%);
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.005em;
     }
-    .login-card { width: 100%; max-width: 420px; padding: 48px 40px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,.5);
-      animation: fadeUp .4s ease; }
-    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .logo { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 36px; }
-    .logo-sub { font-size: 13px; color: var(--muted); text-align: center; }
-    h2 { font-size: 22px; font-weight: 600; margin-bottom: 6px; text-align: center; }
-    .subtitle { font-size: 14px; color: var(--muted); text-align: center; margin-bottom: 32px; }
-    .field { margin-bottom: 16px; }
-    .field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--muted); }
-    .field input { width: 100%; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border);
-      border-radius: var(--radius); color: var(--text); font-size: 15px; font-family: inherit;
-      transition: border-color .2s, box-shadow .2s; outline: none; }
-    .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,170,.15); }
-    .btn-login { width: 100%; padding: 13px; background: linear-gradient(135deg, var(--accent), #00B8D4);
-      border: none; border-radius: var(--radius); color: #0d1117; font-size: 15px; font-weight: 700;
-      font-family: inherit; cursor: pointer; margin-top: 8px; transition: opacity .2s, transform .1s; }
-    .btn-login:hover { opacity: .9; }
-    .btn-login:active { transform: scale(.98); }
-    .btn-login:disabled { opacity: .5; cursor: not-allowed; }
-    .error-msg { display: none; background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.3);
-      color: #f85149; padding: 12px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      padding: 48px 40px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+      animation: fadeUp 0.4s ease;
+    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes softFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .logo { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 32px; }
+    .logo img { filter: brightness(1.1); }
+    .logo-sub { font-size: 13px; color: var(--text-3); }
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-align: center;
+      letter-spacing: -0.01em;
+    }
+    .subtitle { font-size: 13px; color: var(--text-3); text-align: center; margin-bottom: 28px; }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: var(--text-3);
+    }
+    .field input {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-md);
+      border-radius: var(--radius);
+      color: var(--text-1);
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s var(--ease);
+      outline: none;
+    }
+    .field input::placeholder { color: var(--text-3); }
+    .field input:focus { border-color: var(--accent-mid); }
+    .btn-login {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--accent), #0090ff);
+      border: none;
+      border-radius: var(--radius);
+      color: #0a1a28;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0, 229, 255, 0.2);
+      transition: all 0.2s var(--ease);
+    }
+    .btn-login:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0, 229, 255, 0.3); }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .error-msg {
+      display: none;
+      background: rgba(255, 92, 92, 0.12);
+      border: 1px solid rgba(255, 92, 92, 0.3);
+      color: var(--red);
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
     .error-msg.show { display: block; }
-    .footer-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
-    .divider { display: flex; align-items: center; gap: 12px; margin: 24px 0; }
-    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-    .divider span { font-size: 12px; color: var(--muted); }
-    .btn-google { width: 100%; padding: 12px; background: #FFFFFF; border: 1px solid #dadce0;
-      border-radius: var(--radius); color: #3c4043; font-size: 14px; font-weight: 600;
-      font-family: inherit; cursor: pointer; display: flex; align-items: center;
-      justify-content: center; gap: 10px; transition: background .15s, box-shadow .15s; }
-    .btn-google:hover { background: #f7f8f8; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
-    .btn-google:disabled { opacity: .5; cursor: not-allowed; }
+    .footer-note { text-align: center; font-size: 12px; color: var(--text-3); margin-top: 22px; }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border-md); }
+    .divider span { font-size: 12px; color: var(--text-3); }
+    .btn-google {
+      width: 100%;
+      padding: 12px;
+      background: #FFFFFF;
+      border: 1px solid #dadce0;
+      border-radius: var(--radius);
+      color: #3c4043;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.15s var(--ease);
+      margin-bottom: 12px;
+    }
+    .btn-google:hover { background: #f7f8f8; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+    .btn-google:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-google svg { width: 18px; height: 18px; flex-shrink: 0; }
-    .email-form { display: none; }
+    .email-form { display: none; animation: softFade 0.2s ease; }
     .email-form.show { display: block; }
-    .toggle-email { background: none; border: none; color: var(--accent); font-size: 12px;
-      cursor: pointer; text-decoration: underline; margin-top: 12px; display: block; text-align: center; width: 100%; }
+    .toggle-email {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+      display: block;
+      text-align: center;
+      width: 100%;
+      margin-bottom: 12px;
+      font-family: inherit;
+    }
+    .toggle-email:hover { color: #00f0ff; }
   </style>
 </head>
 <body>
