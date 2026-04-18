@@ -544,3 +544,183 @@ body {
 }
 #btn-send:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0, 229, 255, 0.35); }
 #btn-send:active { transform: translateY(0); }
+
+/* ================================================================
+   SPRINT 4 — Conv list + filtros pills
+   ================================================================ */
+
+/* Sidebar — cor própria distinta do chat */
+.inbox-sidebar {
+    background: var(--bg-convlist);
+    border-right: 1px solid var(--border-strong);
+}
+
+.sidebar-header {
+    padding: 16px 14px 10px;
+    background: transparent;
+    border-bottom: none;
+}
+.sidebar-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+}
+
+/* Filter dropdown trigger — pill outline */
+.filter-dropdown-trigger {
+    padding: 5px 8px;
+    background: transparent;
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    transition: all 0.15s var(--ease);
+}
+.filter-dropdown-trigger:hover {
+    border-color: var(--border-hover);
+    color: var(--accent);
+}
+.filter-active-dot {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+.filter-dropdown-menu {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 12px;
+}
+
+/* Type tabs — segmented control dentro do menu */
+.inbox-type-tabs {
+    display: flex;
+    gap: 3px;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 3px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+.type-tab {
+    flex: 1;
+    padding: 5px 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--text-3);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.type-tab:hover { color: var(--text-2); background: transparent; }
+.type-tab.active {
+    background: var(--bg-elevated);
+    color: var(--accent);
+    box-shadow: none;
+}
+
+/* Status chips — pills outline */
+.sidebar-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+.filter-chip {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.filter-chip:hover { border-color: var(--border-hover); color: var(--text-2); }
+.filter-chip.active {
+    background: var(--accent-dim);
+    border-color: var(--accent-mid);
+    color: var(--accent);
+}
+
+/* Search — input com ícone implícito */
+.sidebar-search {
+    background: var(--bg-input);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-1);
+    font-size: 12px;
+    padding: 7px 10px;
+}
+.sidebar-search:focus { border-color: var(--accent-mid); }
+.sidebar-search::placeholder { color: var(--text-3); }
+
+/* Conversation list */
+.conversation-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 8px;
+}
+
+/* Conv item — card com avatar + nome/hora + pills */
+.conv-item {
+    padding: 12px 14px;
+    margin: 2px 8px;
+    border-radius: var(--radius);
+    border-left: none;
+    background: transparent;
+    transition: all 0.15s var(--ease);
+}
+.conv-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+.conv-item.active {
+    background: var(--accent-dim);
+    border-left: none;
+    outline: 1.5px solid var(--accent-mid);
+    outline-offset: -1.5px;
+}
+.conv-item.unread {
+    background: transparent;
+    border-left: none;
+}
+.conv-item.unread .conv-name { color: var(--text-1); font-weight: 700; }
+.conv-item.unread .conv-time { color: var(--accent); }
+
+.conv-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    letter-spacing: -0.01em;
+    color: var(--text-1);
+}
+.conv-time { font-size: 11px; color: var(--text-3); font-weight: 400; }
+.conv-company { font-size: 11.5px; color: var(--text-2); margin-bottom: 3px; font-weight: 500; }
+.conv-preview { font-size: 12px; color: var(--text-3); line-height: 18px; }
+
+/* Tags/pills dentro do conv-item */
+.conv-tags { gap: 4px; margin-top: 7px; align-items: center; }
+.tag {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.tag-comercial { background: var(--accent-dim); color: var(--accent); }
+.tag-opec { background: var(--amber-dim); color: var(--amber); }
+.tag-form { background: var(--purple-dim); color: var(--purple); }
+.tag-wa { background: var(--green-dim); color: var(--green); }
+.tag-waiting { background: var(--purple-dim); color: var(--purple); }
+.tag-unclassified { background: rgba(255, 255, 255, 0.06); color: var(--text-3); }
+.tag-unread {
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-weight: 700;
+}
+
+/* Conv type badge (dentro de lead panel details) */
+.conv-type-badge { padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.conv-type-badge.inbound { background: var(--accent-dim); color: var(--accent); }
+.conv-type-badge.prospecting { background: var(--green-dim); color: var(--green); }
