@@ -183,7 +183,7 @@
   <!-- Pipedrive "p" — sans-serif geométrica: stem vertical reto + bowl circular donut -->
   <symbol id="icon-pipedrive" viewBox="0 0 24 24" fill="currentColor" stroke="none">
     <rect x="5" y="3" width="3.5" height="18" fill="currentColor" stroke="none"/>
-    <path fill="currentColor" fill-rule="evenodd" stroke="none" d="M12 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Zm0 3a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>
+    <path fill="currentColor" fill-rule="evenodd" stroke="none" d="M12 3a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm0 3a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/>
   </symbol>
 
   <!-- Tag / Label -->
