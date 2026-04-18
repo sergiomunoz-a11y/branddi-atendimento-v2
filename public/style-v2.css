@@ -5,3 +5,114 @@
    ROLLBACK: comentar a tag <link> em index.html para desativar.
    Nenhum JS deve depender deste arquivo.
    ================================================================ */
+
+/* ─── SPRINT 1 — Design tokens + typography ───────────────── */
+:root {
+    /* Backgrounds — 6 tons distintos, cada zona tem identidade */
+    --bg-deep:       #0f1923;
+    --bg-base:       #0f1923;
+    --bg-nav:        rgba(8, 18, 28, 0.85);
+    --bg-surface:    #152130;
+    --bg-convlist:   #152130;
+    --bg-chat:       #111c28;
+    --bg-panel:      #19293a;
+    --bg-input:      #1a2a3a;
+    --bg-card:       #1e3044;
+    --bg-card-hover: #243a50;
+    --bg-hover:      #243a50;
+    --bg-active:     #1e3248;
+    --bg-elevated:   #1e3248;
+
+    /* Accent family */
+    --accent:       #00E5FF;
+    --accent-dim:   rgba(0, 229, 255, 0.12);
+    --accent-soft:  rgba(0, 229, 255, 0.08);
+    --accent-mid:   rgba(0, 229, 255, 0.22);
+    --accent-glow:  rgba(0, 229, 255, 0.06);
+    --border-accent: rgba(0, 229, 255, 0.3);
+
+    /* Secondary palette */
+    --teal:         #4BBECD;
+    --amber:        #F5A623;
+    --amber-dim:    rgba(245, 166, 35, 0.12);
+    --amber-soft:   rgba(245, 166, 35, 0.1);
+    --red:          #FF5C5C;
+    --red-dim:      rgba(255, 92, 92, 0.12);
+    --red-soft:     rgba(255, 92, 92, 0.1);
+    --green:        #34D399;
+    --green-dim:    rgba(52, 211, 153, 0.12);
+    --green-soft:   rgba(52, 211, 153, 0.1);
+    --purple:       #A78BFA;
+    --purple-dim:   rgba(167, 139, 250, 0.1);
+
+    /* Text */
+    --text-1:         #ECF2F8;
+    --text-primary:   #ECF2F8;
+    --text-2:         #8DA4B8;
+    --text-secondary: #8DA4B8;
+    --text-3:         #546A7B;
+    --text-muted:     #546A7B;
+
+    /* Borders */
+    --border:        rgba(255, 255, 255, 0.06);
+    --border-md:     rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --border-hover:  rgba(255, 255, 255, 0.18);
+    --glass:         rgba(255, 255, 255, 0.03);
+
+    /* Radius — levemente mais suave */
+    --radius:    10px;
+    --radius-sm: 7px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+
+    /* Shadows mais profundas para hierarquia */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+    --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+    /* Typography — DM Sans com fallback Inter */
+    --font: 'DM Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Base tweaks ──────────────────────────────────────────── */
+body {
+    font-family: var(--font);
+    background: var(--bg-base);
+    color: var(--text-1);
+    font-feature-settings: 'ss01', 'cv11';
+    letter-spacing: -0.005em;
+}
+
+/* Scrollbar refinado */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* ─── Animations — library ────────────────────────────────── */
+@keyframes v2-fadeUp   { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes v2-fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v2-slideIn  { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@keyframes v2-scaleIn  { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes v2-pulse    { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes v2-glow     { 0%, 100% { box-shadow: 0 0 6px var(--accent); } 50% { box-shadow: 0 0 14px var(--accent); } }
+
+/* Sobrescrever animações antigas para usarem novos keyframes */
+.conv-item    { animation: v2-slideIn 0.2s ease both; }
+.msg-bubble   { animation: v2-fadeUp 0.2s ease both; }
+.script-card  { animation: v2-fadeUp 0.25s ease both; }
+.kpi-card     { animation: v2-fadeUp 0.3s ease both; }
+
+/* ─── Glass utility ───────────────────────────────────────── */
+.glass {
+    background: var(--glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
