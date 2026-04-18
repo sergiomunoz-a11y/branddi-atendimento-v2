@@ -160,6 +160,15 @@ function setupEventDelegation() {
             case 'toggle-filter-menu':
                 toggleFilterMenu();
                 break;
+            case 'toggle-lead-panel': {
+                const layout = document.querySelector('.inbox-layout');
+                const btn = document.querySelector('.btn-toggle-lead-panel');
+                if (!layout) break;
+                const hidden = layout.classList.toggle('lead-panel-hidden');
+                try { localStorage.setItem('leadPanelHidden', hidden ? '1' : '0'); } catch(_){}
+                if (btn) btn.classList.toggle('active', !hidden);
+                break;
+            }
             case 'toggle-lp-details':
                 el.closest('.lp-collapsible')?.classList.toggle('open');
                 break;
@@ -245,6 +254,14 @@ async function saveInternalNote() {
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', async () => {
+    // Restaura estado do lead panel (redesign v2)
+    try {
+        const layout = document.querySelector('.inbox-layout');
+        if (layout && localStorage.getItem('leadPanelHidden') === '1') {
+            layout.classList.add('lead-panel-hidden');
+        }
+    } catch(_){}
+
     // Verifica autenticacao
     const token = getToken();
     if (!token) {
@@ -573,6 +590,9 @@ function renderChatArea(conv) {
                 </div>
             </div>
             <div class="chat-header-actions">
+                <button class="btn-sm btn-toggle-lead-panel" data-action="toggle-lead-panel" title="Painel do lead">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                </button>
                 <div class="route-dropdown">
                     <button class="btn-sm btn-route-trigger" data-action="route-dropdown">
                         <svg class="icon icon-sm"><use href="/icons.svg#icon-share"></use></svg> Atribuir
