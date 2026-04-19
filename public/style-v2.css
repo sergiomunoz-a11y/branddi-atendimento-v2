@@ -327,16 +327,20 @@ body {
     z-index: 0;
 }
 
-/* Watermark BrandMark SVG centralizado no chat */
+/* Watermark BrandMark SVG — posição estável (não se move com toggle do lead-panel)
+   Centralizado na área de chat assumindo lead-panel SEMPRE visível (330px reservados à direita).
+   Nav(66) + conv-list(290) = 356px à esquerda. Lead-panel = 330px à direita. */
 .chat-area::after {
     content: "";
-    position: absolute;
-    inset: 0;
-    width: 440px;
-    height: 440px;
-    margin: auto;
+    position: fixed;
+    top: 50vh;
+    left: calc(356px + (100vw - 356px - 330px) / 2);
+    transform: translate(-50%, -50%);
+    width: 560px;
+    height: 560px;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 135 203' fill='none'><path d='M71.37 118.33L58.03 104.94c-.84 2.83-2.34 5.39-4.4 7.46L14.13 152.06a4.46 4.46 0 000 6.38l29.82 29.94 26.1-26.3c12.17-13.12 13.94-31.08 1.32-43.78v.03z' fill='%234bbecd'/><path d='M116.74 70.64L50.03 3.7A12.85 12.85 0 0041.16 0c-3.36 0-6.5 1.32-8.87 3.7L3.64 32.55c-4.85 4.9-4.85 12.88 0 17.78l35.36 35.6 6.87 6.92a7.96 7.96 0 01-.09 10.93L6.28 146.43a12.75 12.75 0 000 17.81l37.61 37.76 30.99-31.11 41.86-42.03c15.98-16.04 15.98-42.15 0-58.19v-.03zM70.05 162.11l-26.1 26.3-29.82-29.94a4.46 4.46 0 010-6.38l39.5-39.65c2.07-2.08 3.57-4.63 4.4-7.46l13.34 13.39c12.62 12.67 10.85 30.66-1.32 43.78v-.04zm39.95-40.02L89.83 142.34c.18-11.82-4.35-23.23-12.83-31.74L52.76 86.26 10.38 43.6a3.56 3.56 0 010-4.27L39.03 10.47a3.05 3.05 0 014.26 0l66.71 66.97c12.26 12.31 12.26 32.35 0 44.65z' fill='%23ecf2f8'/></svg>");
     background-repeat: no-repeat;
+    background-position: center center;
     background-size: contain;
     opacity: 0.04;
     pointer-events: none;
