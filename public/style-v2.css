@@ -758,6 +758,62 @@ body {
 }
 .btn-toggle-lead-panel .icon { width: 15px; height: 15px; }
 
+/* Botão "Enviar ao Pipedrive" no chat header */
+.btn-push-pipedrive {
+    height: 32px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-mid);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.btn-push-pipedrive:hover {
+    background: var(--accent-mid);
+    color: var(--bg-0);
+}
+.btn-push-pipedrive:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+.btn-push-pipedrive .icon { width: 14px; height: 14px; }
+
+/* Botão apagar conversa (Admin) — ícone só, vermelho no hover */
+.btn-delete-conv, .btn-restore-conv {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+.btn-delete-conv:hover {
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+}
+.btn-restore-conv {
+    width: auto;
+    padding: 0 10px;
+    gap: 6px;
+}
+.btn-restore-conv:hover {
+    border-color: var(--accent-mid);
+    color: var(--accent);
+}
+.btn-delete-conv .icon, .btn-restore-conv .icon { width: 15px; height: 15px; }
+
 /* Quando lead-panel-hidden, esconde painel e o grid se ajusta */
 .inbox-layout.lead-panel-hidden .lead-panel {
     display: none !important;

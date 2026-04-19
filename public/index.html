@@ -106,6 +106,7 @@
                                         <button class="filter-chip active" data-filter="all">Todos</button>
                                         <button class="filter-chip" data-filter="waiting">Aguardando</button>
                                         <button class="filter-chip" data-filter="in_progress">Em andamento</button>
+                                        <button class="filter-chip admin-only" data-filter="archived" id="filter-archived" style="display:none" title="Ver conversas arquivadas (Admin)">🗃️ Arquivadas</button>
                                     </div>
                                 </div>
                                 <div class="filter-group" id="filter-user-group" style="display:none">
@@ -566,6 +567,37 @@
 </div>
 
 <!-- ─── Modal: Configuracoes da Plataforma ──────────── -->
+<!-- Modal: apagar conversa (Admin only) -->
+<div class="modal-overlay" id="modal-delete-conv" style="display:none" onclick="if(event.target===this){document.getElementById('modal-delete-conv').style.display='none'}">
+    <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+            <h3>🗑️ Apagar conversa</h3>
+            <button class="modal-close" data-action="close-delete-conv-modal">✕</button>
+        </div>
+        <div class="modal-body" style="padding:20px">
+            <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">Escolha como apagar esta conversa:</p>
+            <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;cursor:pointer;padding:12px;border:1px solid var(--border-md);border-radius:8px">
+                <input type="radio" name="delete-mode" value="archive" checked style="margin-top:3px;accent-color:#00E5FF" />
+                <span>
+                    <b>🗃️ Arquivar</b>
+                    <span style="display:block;font-size:12px;color:var(--text-muted);margin-top:3px">Some do inbox mas fica na base. Pode ser restaurada depois pelo filtro "Arquivadas".</span>
+                </span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:12px;border:1px solid var(--border-md);border-radius:8px">
+                <input type="radio" name="delete-mode" value="delete" style="margin-top:3px;accent-color:#ff6b6b" />
+                <span>
+                    <b style="color:#ff6b6b">🗑️ Excluir permanentemente</b>
+                    <span style="display:block;font-size:12px;color:var(--text-muted);margin-top:3px">Remove da base definitivamente (conversa + todas as mensagens). <b>Irreversível.</b></span>
+                </span>
+            </label>
+        </div>
+        <div class="modal-footer" style="padding:14px 20px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border-md)">
+            <button class="btn-sm" data-action="close-delete-conv-modal">Cancelar</button>
+            <button class="btn-sm btn-primary" data-action="confirm-delete-conv">Confirmar</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modal-settings" style="display:none" onclick="if(event.target===this)closeSettingsModal()">
     <div class="modal" style="max-width:700px">
         <div class="modal-header">
@@ -600,6 +632,34 @@
                             <input type="text" id="settings-my-name" class="settings-input" placeholder="Seu nome" />
                             <span style="font-size:11px;color:var(--text-muted)">Aparece como remetente nas mensagens enviadas por voce</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Modo do Chatbot (SÓ Admin) -->
+                <div class="settings-section admin-section" id="section-bot-mode">
+                    <h4 class="settings-section-title">🧠 Modo do Chatbot</h4>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Define como o bot trata novas conversas no WhatsApp.</p>
+                    <div class="form-group">
+                        <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;cursor:pointer">
+                            <input type="radio" name="bot-mode" value="ai" id="bot-mode-ai" checked style="margin-top:3px;accent-color:#00E5FF" />
+                            <span>
+                                <b>Agente IA</b> — LLM qualifica o lead com perguntas naturais.
+                                <span style="display:block;font-size:11px;color:var(--text-muted)">Usa Gemini/Claude/NVIDIA conforme configurado nas env vars.</span>
+                            </span>
+                        </label>
+                        <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;cursor:pointer">
+                            <input type="radio" name="bot-mode" value="manual" id="bot-mode-manual" style="margin-top:3px;accent-color:#00E5FF" />
+                            <span>
+                                <b>Manual (simples)</b> — Cumprimenta, pergunta Comercial vs OPEC, pede nome/cargo/empresa/site em 1 mensagem.
+                                <span style="display:block;font-size:11px;color:var(--text-muted)">Mini-LLM só extrai os campos. Sem conversação livre.</span>
+                            </span>
+                        </label>
+                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+                            <input type="radio" name="bot-mode" value="off" id="bot-mode-off" style="margin-top:3px;accent-color:#00E5FF" />
+                            <span>
+                                <b>Desligado</b> — Bot não responde. Toda conversa cai direto na fila do atendente.
+                            </span>
+                        </label>
                     </div>
                 </div>
 

@@ -26,6 +26,8 @@ const DEFAULTS = {
     pipedrive_stage_name:    'MQL - Novo Lead',
     pipedrive_owner_id:      null,
     pipedrive_owner_name:    'Não atribuído',
+    // Chatbot mode
+    bot_mode: 'ai', // 'ai' | 'manual' | 'off'
 };
 
 // ─── GET /api/settings/my-profile — Perfil pessoal do user logado ─────
@@ -87,6 +89,7 @@ router.post('/settings', requireAuth, requireRole('Admin'), async (req, res) => 
             'pipedrive_pipeline_id', 'pipedrive_pipeline_name',
             'pipedrive_stage_id', 'pipedrive_stage_name',
             'pipedrive_owner_id', 'pipedrive_owner_name',
+            'bot_mode',
         ];
         for (const key of allowed) {
             if (req.body[key] !== undefined) {

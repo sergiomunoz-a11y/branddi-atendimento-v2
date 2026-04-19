@@ -5,18 +5,23 @@ import { Router } from 'express';
 import {
     getInbox, updateConversation, createRoutingEvent, getDashboardStats
 } from '../services/supabase.js';
-import { queueConversationSync } from '../services/crm-sync.js';
+import { queueConversationSync, syncConversationToPipedrive } from '../services/crm-sync.js';
+import { requireRole } from '../middleware/auth.js';
+import supabase from '../services/supabase.js';
 
 const router = Router();
 
 // ─── GET /api/inbox — Lista conversas filtradas por role/usuário ──────
 router.get('/inbox', async (req, res) => {
     try {
-        const { status, type, limit = 50, filter_user_id } = req.query;
+        const { status, type, limit = 50, filter_user_id, archived } = req.query;
         const user   = req.user || {};
         const role   = user.role;
         const userId = user.id;
         const permissions = user.permissions || {};
+
+        // archived=true só permitido para Admin
+        const showArchived = archived === 'true' && role === 'Admin';
 
         const conversations = await getInbox({
             status,
@@ -26,6 +31,7 @@ router.get('/inbox', async (req, res) => {
             user_id: userId,
             allowed_types: role === 'Admin' ? null : (permissions.conversation_types || []),
             filter_user_id: role === 'Admin' ? (filter_user_id || null) : null,
+            archived: showArchived,
         });
         res.json({ conversations, total: conversations.length });
     } catch (err) {
@@ -153,6 +159,73 @@ router.patch('/inbox/:id/assign-user', async (req, res) => {
             status: user_id ? 'in_progress' : 'waiting',
         });
         res.json({ success: true, conversation: updated });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/inbox/:id/archive — Arquiva conversa (Admin, reversível) ─
+router.post('/inbox/:id/archive', requireRole('Admin'), async (req, res) => {
+    try {
+        const { error } = await supabase
+            .from('conversations')
+            .update({ archived_at: new Date().toISOString() })
+            .eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/inbox/:id/unarchive — Restaura conversa arquivada (Admin) ─
+router.post('/inbox/:id/unarchive', requireRole('Admin'), async (req, res) => {
+    try {
+        const { error } = await supabase
+            .from('conversations')
+            .update({ archived_at: null })
+            .eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── DELETE /api/inbox/:id — Hard delete (Admin, irreversível) ──────────
+// Cascade: messages + routing_events são deletadas automaticamente (FK ON DELETE CASCADE).
+// Lead permanece (FK ON DELETE SET NULL).
+router.delete('/inbox/:id', requireRole('Admin'), async (req, res) => {
+    try {
+        const { error } = await supabase
+            .from('conversations')
+            .delete()
+            .eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/inbox/:id/push-to-pipedrive — Envia conversa ao Pipedrive
+// Cria Person + Org + Deal + Note (qualificação) + Activity (transcript).
+// Qualquer atendente pode disparar. Bloqueado para leads classificados como OPEC.
+router.post('/inbox/:id/push-to-pipedrive', async (req, res) => {
+    try {
+        const { getConversationById } = await import('../services/supabase.js');
+        const conv = await getConversationById(req.params.id);
+        if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+
+        const cls = conv.leads?.classification;
+        if (cls === 'opec') {
+            return res.status(400).json({
+                error: 'Leads OPEC não são enviados ao Pipedrive.'
+            });
+        }
+
+        const result = await syncConversationToPipedrive(req.params.id);
+        res.json({ success: true, ...result });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
