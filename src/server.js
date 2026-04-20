@@ -171,7 +171,8 @@ app.listen(PORT, () => {
     }
 
     startCrmSyncWorker();
-    startChatbotWorkers();
+    // Auto-reply workers (away/nudge/followup) desativados — nenhuma mensagem automática por inatividade.
+    // startChatbotWorkers();
 });
 
 export default app;
