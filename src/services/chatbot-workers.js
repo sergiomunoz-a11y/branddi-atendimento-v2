@@ -153,8 +153,9 @@ async function checkFollowups() {
         // Conversas em estado 'human' sem atendente atribuído
         const { data: convs } = await supabase
             .from('conversations')
-            .select('id, whatsapp_chat_id, chatbot_stage, assigned_to, chatbot_answers, leads(name, classification)')
+            .select('id, whatsapp_chat_id, chatbot_stage, assigned_to, chatbot_answers, leads!inner(name, classification, origin)')
             .eq('chatbot_stage', 'human')
+            .neq('leads.origin', 'pipedrive_outbound')
             .in('status', ['waiting', 'in_progress'])
             .is('assigned_user_id', null) // ninguém pegou individualmente
             .lt('updated_at', cutoff)

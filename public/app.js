@@ -183,8 +183,129 @@ function setupEventDelegation() {
                 closeRouteDropdown();
                 break;
             }
+            case 'push-pipedrive':
+                pushConversationToPipedrive(id, el);
+                break;
+            case 'delete-conv-menu':
+                openDeleteConvModal(id);
+                break;
+            case 'restore-conv':
+                restoreConversation(id);
+                break;
+            case 'confirm-delete-conv':
+                confirmDeleteConv();
+                break;
+            case 'close-delete-conv-modal':
+                closeDeleteConvModal();
+                break;
         }
     });
+}
+
+// ─── Apagar conversa (Admin only) ────────────────────────────────────
+let _deleteConvTargetId = null;
+
+function openDeleteConvModal(conversationId) {
+    if (currentUser?.role !== 'Admin') return;
+    _deleteConvTargetId = conversationId;
+    const modal = document.getElementById('modal-delete-conv');
+    if (modal) modal.style.display = 'flex';
+    // reset radios pro default
+    const radio = document.querySelector('input[name="delete-mode"][value="archive"]');
+    if (radio) radio.checked = true;
+}
+
+function closeDeleteConvModal() {
+    _deleteConvTargetId = null;
+    const modal = document.getElementById('modal-delete-conv');
+    if (modal) modal.style.display = 'none';
+}
+
+async function confirmDeleteConv() {
+    const id = _deleteConvTargetId;
+    if (!id) return;
+    const mode = document.querySelector('input[name="delete-mode"]:checked')?.value || 'archive';
+
+    if (mode === 'delete' && !confirm('Esta ação é IRREVERSÍVEL. Apagar conversa e todas as mensagens do banco?')) return;
+
+    try {
+        if (mode === 'archive') {
+            const r = await fetch(`/api/inbox/${id}/archive`, { method: 'POST', credentials: 'include' });
+            if (!r.ok) throw new Error((await r.json()).error || 'Erro ao arquivar');
+            alert('✅ Conversa arquivada.');
+        } else {
+            const r = await fetch(`/api/inbox/${id}`, { method: 'DELETE', credentials: 'include' });
+            if (!r.ok) throw new Error((await r.json()).error || 'Erro ao excluir');
+            alert('🗑️ Conversa excluída permanentemente.');
+        }
+        closeDeleteConvModal();
+        // Remove da lista local e volta ao empty state
+        allConversations = allConversations.filter(c => c.id !== id);
+        if (currentConversation?.id === id) {
+            currentConversation = null;
+            const area = document.getElementById('chat-area');
+            if (area) area.innerHTML = '<div class="empty-state-pro"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><h3>Selecione uma conversa</h3><p>Escolha uma conversa na lista ao lado para iniciar o atendimento</p></div>';
+        }
+        renderConversationList();
+    } catch (err) {
+        alert(`❌ Falha: ${err.message}`);
+    }
+}
+
+async function restoreConversation(conversationId) {
+    if (currentUser?.role !== 'Admin') return;
+    if (!confirm('Restaurar esta conversa para o inbox ativo?')) return;
+    try {
+        const r = await fetch(`/api/inbox/${conversationId}/unarchive`, { method: 'POST', credentials: 'include' });
+        if (!r.ok) throw new Error((await r.json()).error || 'Erro ao restaurar');
+        alert('✅ Conversa restaurada.');
+        // Refresh lista
+        allConversations = allConversations.filter(c => c.id !== conversationId);
+        currentConversation = null;
+        renderConversationList();
+        if (typeof loadInbox === 'function') loadInbox();
+    } catch (err) {
+        alert(`❌ Falha: ${err.message}`);
+    }
+}
+
+async function pushConversationToPipedrive(conversationId, btnEl) {
+    if (!conversationId) return;
+    if (!confirm('Enviar esta conversa ao Pipedrive?\n\nIsso vai criar pessoa, deal, transcript e nota com dados de qualificação.')) return;
+
+    const original = btnEl?.innerHTML;
+    if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = 'Enviando...'; }
+
+    try {
+        const res = await fetch(`/api/inbox/${conversationId}/push-to-pipedrive`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao enviar ao Pipedrive');
+
+        if (data.already_synced) {
+            alert('Conversa já foi enviada anteriormente ao Pipedrive.');
+        } else {
+            alert(`✅ Deal #${data.deal_id} criado no Pipedrive.`);
+        }
+
+        // Atualiza estado local e re-renderiza o chat (botão some)
+        if (currentConversation?.id === conversationId) {
+            currentConversation.crm_deal_id = String(data.deal_id);
+            if (currentConversation.leads) {
+                currentConversation.leads.crm_deal_id = String(data.deal_id);
+                currentConversation.leads.crm_person_id = String(data.person_id);
+            }
+            renderChatArea(currentConversation);
+            renderLeadPanel(currentConversation);
+            await loadMessages(conversationId, currentConversation.whatsapp_chat_id);
+        }
+    } catch (err) {
+        alert(`❌ Falha ao enviar ao Pipedrive: ${err.message}`);
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = original; }
+    }
 }
 
 // --- Filter Dropdown ---
@@ -385,8 +506,14 @@ function setupInboxFilters() {
         chip.addEventListener('click', () => {
             document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
             chip.classList.add('active');
+            const prev = currentFilter;
             currentFilter = chip.dataset.filter;
-            renderConversationList();
+            // Alternar para/de 'archived' exige reload do inbox (filtro server-side)
+            if (currentFilter === 'archived' || prev === 'archived') {
+                loadInbox();
+            } else {
+                renderConversationList();
+            }
             updateFilterDot();
         });
     });
@@ -476,7 +603,8 @@ async function loadInbox(silent = false) {
         const typeParam = currentTypeFilter !== 'all' ? `&type=${currentTypeFilter}` : '';
         const userFilter = document.getElementById('inbox-user-filter')?.value;
         const userParam = userFilter ? `&filter_user_id=${userFilter}` : '';
-        const data = await apiFetch(`/api/inbox?limit=100${typeParam}${userParam}`);
+        const archivedParam = currentFilter === 'archived' ? '&archived=true' : '';
+        const data = await apiFetch(`/api/inbox?limit=100${typeParam}${userParam}${archivedParam}`);
         const newConversations = data.conversations || [];
 
         // Hash rápido para detectar mudanças e evitar re-render desnecessário (flicker)
@@ -508,11 +636,12 @@ function renderConversationList() {
     const list = document.getElementById('conversation-list');
     let filtered = allConversations;
 
-    if (currentFilter !== 'all') {
+    if (currentFilter !== 'all' && currentFilter !== 'archived') {
         if (currentFilter === 'waiting') filtered = filtered.filter(c => c.status === 'waiting');
         else if (currentFilter === 'comercial') filtered = filtered.filter(c => c.assigned_to === 'comercial' || c.leads?.classification === 'comercial');
         else if (currentFilter === 'opec') filtered = filtered.filter(c => c.assigned_to === 'opec' || c.leads?.classification === 'opec');
     }
+    // archived: servidor já retorna só as arquivadas, sem filtro client-side adicional
 
     // Client-side search
     if (inboxSearchTerm) {
@@ -590,6 +719,19 @@ function renderChatArea(conv) {
                 </div>
             </div>
             <div class="chat-header-actions">
+                ${(cls !== 'opec' && !conv.crm_deal_id && !lead.crm_deal_id) ? `
+                <button class="btn-sm btn-push-pipedrive" data-action="push-pipedrive" data-id="${escHtml(String(conv.id))}" title="Enviar ao Pipedrive (cria deal, pessoa, transcript)">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Pipedrive
+                </button>` : ''}
+                ${currentUser?.role === 'Admin' ? (conv.archived_at ? `
+                <button class="btn-sm btn-restore-conv" data-action="restore-conv" data-id="${escHtml(String(conv.id))}" title="Restaurar conversa arquivada">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+                    Restaurar
+                </button>` : `
+                <button class="btn-sm btn-delete-conv" data-action="delete-conv-menu" data-id="${escHtml(String(conv.id))}" title="Arquivar ou excluir (Admin)">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                </button>`) : ''}
                 <button class="btn-sm btn-toggle-lead-panel" data-action="toggle-lead-panel" title="Painel do lead">
                     <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
                 </button>
@@ -2141,6 +2283,11 @@ async function openSettingsModal() {
             const agentNameEl = document.getElementById('settings-agent-name');
             if (agentNameEl) agentNameEl.value = _settingsData.agent_name || '';
 
+            // Chatbot mode (ai | manual | off)
+            const botMode = _settingsData.bot_mode || 'ai';
+            const botModeEl = document.getElementById(`bot-mode-${botMode}`);
+            if (botModeEl) botModeEl.checked = true;
+
             // Bot 24h
             const awayEnabledEl = document.getElementById('settings-away-enabled');
             if (awayEnabledEl) awayEnabledEl.checked = !!_settingsData.away_enabled;
@@ -2483,9 +2630,11 @@ async function saveSettings() {
                 const pipelineOpt = pipelineSel.options[pipelineSel.selectedIndex];
                 const stageOpt    = stageSel.options[stageSel.selectedIndex];
 
+                const botModeSel = document.querySelector('input[name="bot-mode"]:checked');
                 const payload = {
                     agent_name:  document.getElementById('settings-agent-name')?.value.trim() || '',
                     agent_photo: preview?.dataset.photo || _settingsData?.agent_photo || '',
+                    bot_mode:    botModeSel?.value || 'ai',
                     away_enabled: document.getElementById('settings-away-enabled')?.checked || false,
                     away_minutes: parseInt(document.getElementById('settings-away-minutes')?.value) || 10,
                     away_message: document.getElementById('settings-away-message')?.value.trim() || '',

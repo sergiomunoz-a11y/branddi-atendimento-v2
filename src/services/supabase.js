@@ -96,6 +96,16 @@ export async function createConversation(data) {
     return conv;
 }
 
+export async function getConversationById(id) {
+    const { data, error } = await supabase
+        .from('conversations')
+        .select('*, leads(*)')
+        .eq('id', id)
+        .single();
+    if (error) throw error;
+    return data;
+}
+
 export async function findConversationByChat(whatsappChatId) {
     const { data } = await supabase
         .from('conversations')
@@ -124,6 +134,7 @@ export async function getInbox({
     status, assigned_to, limit = 50,
     type, role, user_id, allowed_types,
     filter_user_id, // Admin pode filtrar por usuário específico
+    archived = false, // true = lista só arquivadas (Admin)
 } = {}) {
     let query = supabase
         .from('conversations')
@@ -136,6 +147,13 @@ export async function getInbox({
         .order('updated_at', { ascending: false })
         .order('created_at', { referencedTable: 'messages', ascending: false })
         .limit(limit);
+
+    // Filtro de arquivadas (assume coluna archived_at; se não existir, Supabase ignora no select)
+    if (archived) {
+        query = query.not('archived_at', 'is', null);
+    } else {
+        query = query.is('archived_at', null);
+    }
 
     if (status) query = query.eq('status', status);
 
@@ -424,9 +442,10 @@ export function normalizePhone(phone) {
 export async function getConversationsWaitingForHuman(cutoffIso) {
     const { data, error } = await supabase
         .from('conversations')
-        .select('id, whatsapp_chat_id, chatbot_stage, bot_away_sent, updated_at, leads(name)')
+        .select('id, whatsapp_chat_id, chatbot_stage, bot_away_sent, updated_at, leads!inner(name, origin)')
         .in('status', ['waiting', 'in_progress'])
         .eq('chatbot_stage', 'human')
+        .neq('leads.origin', 'pipedrive_outbound')
         .or('bot_away_sent.is.null,bot_away_sent.eq.false')
         .lt('updated_at', cutoffIso)
         .limit(20);

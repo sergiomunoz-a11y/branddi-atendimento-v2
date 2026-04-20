@@ -33,6 +33,7 @@ import { findFAQAnswer } from './chatbot-faq.js';
 import { trackBotEvent } from './chatbot-workers.js';
 import { getBotMessage, getMaxRetries } from './business-config.js';
 import { isLLMBotAvailable, processLLMBotMessage } from './llm-bot.js';
+import { processManualBotMessage } from './manual-bot.js';
 import logger from './logger.js';
 
 // ─── FLOW MESSAGES (loaded from config/business.yaml, with fallbacks) ─
@@ -95,6 +96,28 @@ export async function processChatbotMessage(conversation, text, chatId, attachme
         // ── Anti-flood check ──
         if (isFlood(chatId)) {
             logger.debug('Flood blocked', { chatId, stage });
+            return;
+        }
+
+        // ── Bot mode toggle (ai | manual | off) ──
+        const botMode = (await getSettingValue('bot_mode', 'ai')) || 'ai';
+
+        if (botMode === 'off') {
+            // Bot desligado — marca stage=human e roteia pra comercial (fila padrão).
+            if (stage !== 'human') {
+                await updateConversation(conversation.id, { chatbot_stage: 'human' });
+                await createRoutingEvent({
+                    conversation_id: conversation.id,
+                    to_team: 'comercial',
+                    reason: 'Bot desligado — roteamento direto',
+                    routed_by: 'bot',
+                });
+            }
+            return;
+        }
+
+        if (botMode === 'manual') {
+            await processManualBotMessage(conversation, text, chatId);
             return;
         }
 
