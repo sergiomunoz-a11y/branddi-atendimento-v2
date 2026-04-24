@@ -4,7 +4,8 @@
  */
 import { Router } from 'express';
 import {
-    getLeads, getLeadById, updateLead, getConversationHistory, getMessages
+    getLeads, getLeadById, updateLead, getConversationHistory, getMessages,
+    logCommercialEvent
 } from '../services/supabase.js';
 import { queueLeadSync } from '../services/crm-sync.js';
 import {
@@ -401,6 +402,14 @@ router.post('/leads/:id/notes', async (req, res) => {
             deal_id: parseInt(targetDealId),
             pinned_to_deal_flag: 0,
         }, apiToken);
+
+        // Loga evento pro dashboard analytics
+        await logCommercialEvent('transcript_sent', {
+            user_id: req.user?.id || null,
+            conversation_id: conversation_id || null,
+            lead_id: lead?.id || null,
+            metadata: { deal_id: targetDealId, msg_count: msgs.length },
+        });
 
         res.json({ ok: true, deal_id: targetDealId, note_id: noteData?.data?.id });
     } catch (err) {

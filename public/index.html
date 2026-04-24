@@ -338,21 +338,58 @@
 <section class="tab-panel" id="panel-dashboard">
     <div class="panel-header">
         <h2 class="panel-title">Dashboard Comercial</h2>
-        <div class="panel-actions">
+        <div class="panel-actions" style="display:flex;gap:8px;flex-wrap:wrap">
             <select class="filter-select" id="dash-period">
-                <option value="7">Ultimos 7 dias</option>
-                <option value="30" selected>Ultimos 30 dias</option>
-                <option value="90">Ultimos 90 dias</option>
+                <option value="7">Últimos 7 dias</option>
+                <option value="30" selected>Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+            </select>
+            <select class="filter-select admin-only" id="dash-user-filter" style="display:none">
+                <option value="">Todos atendentes</option>
+            </select>
+            <select class="filter-select admin-only" id="dash-account-filter" style="display:none">
+                <option value="">Todos números</option>
+            </select>
+            <select class="filter-select" id="dash-type-filter">
+                <option value="">Todos tipos</option>
+                <option value="inbound">Inbound (site)</option>
+                <option value="prospecting">Prospecção</option>
             </select>
         </div>
     </div>
 
-    <!-- KPI Cards -->
-    <div class="kpi-grid" id="kpi-grid">
+    <!-- KPIs: Atividade -->
+    <h3 class="dash-section-title">📨 Atividade no WhatsApp</h3>
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-accent">
+            <div class="kpi-label">Enviados</div>
+            <div class="kpi-value" id="kpi-sent">—</div>
+            <div class="kpi-sub">mensagens outbound</div>
+        </div>
+        <div class="kpi-card kpi-green">
+            <div class="kpi-label">Respostas</div>
+            <div class="kpi-value" id="kpi-received">—</div>
+            <div class="kpi-sub">mensagens inbound</div>
+        </div>
         <div class="kpi-card">
-            <div class="kpi-label">Total Leads</div>
+            <div class="kpi-label">Taxa de resposta</div>
+            <div class="kpi-value" id="kpi-reply-rate">—</div>
+            <div class="kpi-sub">respostas / envios</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Tempo 1ª resposta</div>
+            <div class="kpi-value" id="kpi-first-resp">—</div>
+            <div class="kpi-sub">do lead</div>
+        </div>
+    </div>
+
+    <!-- KPIs: Leads -->
+    <h3 class="dash-section-title">🎯 Leads e classificação</h3>
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">Total leads</div>
             <div class="kpi-value" id="kpi-total">—</div>
-            <div class="kpi-sub">no periodo</div>
+            <div class="kpi-sub">no período</div>
         </div>
         <div class="kpi-card kpi-green">
             <div class="kpi-label">🟢 Comercial</div>
@@ -365,30 +402,99 @@
             <div class="kpi-sub" id="kpi-opec-pct">—%</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">📋 Formulario</div>
-            <div class="kpi-value" id="kpi-form">—</div>
-            <div class="kpi-sub">via site</div>
+            <div class="kpi-label">Conversas ativas</div>
+            <div class="kpi-value" id="kpi-convs">—</div>
+            <div class="kpi-sub">no período</div>
+        </div>
+    </div>
+
+    <!-- KPIs: Ações comerciais -->
+    <h3 class="dash-section-title">⚙️ Ações comerciais</h3>
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-label">WA BB</div>
+            <div class="kpi-value" id="kpi-act-bb">—</div>
+            <div class="kpi-sub">atividades criadas</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">📱 WhatsApp Direto</div>
-            <div class="kpi-value" id="kpi-wa">—</div>
-            <div class="kpi-sub">organico</div>
+            <div class="kpi-label">WA FR</div>
+            <div class="kpi-value" id="kpi-act-fr">—</div>
+            <div class="kpi-sub">atividades criadas</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">WA VM</div>
+            <div class="kpi-value" id="kpi-act-vm">—</div>
+            <div class="kpi-sub">atividades criadas</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Transcrições</div>
+            <div class="kpi-value" id="kpi-transcripts">—</div>
+            <div class="kpi-sub">enviadas ao deal</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">🔍 Apollo</div>
+            <div class="kpi-value" id="kpi-apollo">—</div>
+            <div class="kpi-sub" id="kpi-apollo-sub">enriquecimentos</div>
         </div>
     </div>
 
     <!-- Charts -->
     <div class="charts-grid">
         <div class="chart-card">
-            <h3 class="chart-title">Leads por Dia</h3>
-            <canvas id="chart-leads-day" height="200"></canvas>
+            <h3 class="chart-title">Envios × Respostas por dia</h3>
+            <canvas id="chart-msgs-day" height="220"></canvas>
         </div>
         <div class="chart-card">
-            <h3 class="chart-title">Distribuicao por Origem</h3>
-            <canvas id="chart-origin" height="200"></canvas>
+            <h3 class="chart-title">Distribuição por origem</h3>
+            <canvas id="chart-origin" height="220"></canvas>
         </div>
         <div class="chart-card">
-            <h3 class="chart-title">Classificacao</h3>
-            <canvas id="chart-classification" height="200"></canvas>
+            <h3 class="chart-title">Classificação</h3>
+            <canvas id="chart-classification" height="220"></canvas>
+        </div>
+    </div>
+
+    <!-- Tabela: Performance por Atendente (Admin only) -->
+    <div class="dash-table-wrap admin-only" id="dash-user-table-wrap" style="display:none;margin-top:24px">
+        <h3 class="dash-section-title">👤 Performance por atendente</h3>
+        <div class="dash-table">
+            <table class="table-pro">
+                <thead>
+                    <tr>
+                        <th>Atendente</th>
+                        <th style="text-align:right">Enviados</th>
+                        <th style="text-align:right">Respostas</th>
+                        <th style="text-align:right">Taxa resp.</th>
+                        <th style="text-align:right">Conversas</th>
+                        <th style="text-align:right">1ª resp. méd.</th>
+                    </tr>
+                </thead>
+                <tbody id="dash-user-tbody">
+                    <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">—</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Tabela: por Número WhatsApp (Admin only) -->
+    <div class="dash-table-wrap admin-only" id="dash-account-table-wrap" style="display:none;margin-top:16px">
+        <h3 class="dash-section-title">📱 Performance por número WhatsApp</h3>
+        <div class="dash-table">
+            <table class="table-pro">
+                <thead>
+                    <tr>
+                        <th>Número</th>
+                        <th>Dono</th>
+                        <th style="text-align:right">Enviados</th>
+                        <th style="text-align:right">Respostas</th>
+                        <th style="text-align:right">Taxa resp.</th>
+                        <th style="text-align:right">Conversas</th>
+                    </tr>
+                </thead>
+                <tbody id="dash-account-tbody">
+                    <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">—</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </section>

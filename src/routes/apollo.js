@@ -18,7 +18,7 @@
  *      - front faz polling aqui até ver completed/not_found/error
  */
 import { Router } from 'express';
-import { getSettingValue, updateLead, normalizePhone } from '../services/supabase.js';
+import { getSettingValue, updateLead, normalizePhone, logCommercialEvent } from '../services/supabase.js';
 import supabase from '../services/supabase.js';
 import { isApolloConfigured, matchPerson } from '../services/apollo.js';
 import { pdGet, pdPut } from '../services/pipedrive.js';
@@ -154,6 +154,11 @@ router.post('/apollo/enrich-and-save/:person_id', async (req, res) => {
         logger.info('Apollo enrich dispatched', {
             ref, personId, wantsPhone, phoneStatus,
             sync_fields: Object.keys(updates),
+        });
+
+        await logCommercialEvent('apollo_enrich_triggered', {
+            user_id: req.user?.id || null,
+            metadata: { person_id: personId, wants_phone: wantsPhone, matched: true },
         });
 
         res.json({
