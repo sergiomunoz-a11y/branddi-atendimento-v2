@@ -7,7 +7,10 @@ import {
 } from '../services/supabase.js';
 import { queueConversationSync, syncConversationToPipedrive } from '../services/crm-sync.js';
 import { requireRole } from '../middleware/auth.js';
+import { createWhatsAppActivity } from '../services/pipedrive.js';
+import { getLeadById } from '../services/supabase.js';
 import supabase from '../services/supabase.js';
+import logger from '../services/logger.js';
 
 const router = Router();
 
@@ -160,6 +163,73 @@ router.patch('/inbox/:id/assign-user', async (req, res) => {
             status: user_id ? 'in_progress' : 'waiting',
         });
         res.json({ success: true, conversation: updated });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/inbox/:id/wa-activity — Atividade WhatsApp manual (BB/FR/VM) ─
+// Cria atividade CONCLUÍDA no Pipedrive com subject tagueado pelo serviço.
+// Não faz dedup — SDR decide (1 deal pode ter múltiplas atividades se tiver
+// múltiplos serviços contratados).
+const VALID_WA_TAGS = ['BB', 'FR', 'VM'];
+const WA_TAG_LABELS = {
+    BB: 'Brand Bidding',
+    FR: 'Fraude',
+    VM: 'Violação de Marca',
+};
+
+router.post('/inbox/:id/wa-activity', async (req, res) => {
+    try {
+        const { tag } = req.body || {};
+        if (!VALID_WA_TAGS.includes(tag)) {
+            return res.status(400).json({ error: `tag inválida. Use: ${VALID_WA_TAGS.join(', ')}` });
+        }
+
+        // Busca a conversa + lead pra obter deal/person/nome
+        const { data: conv, error: convErr } = await supabase
+            .from('conversations')
+            .select('id, lead_id')
+            .eq('id', req.params.id)
+            .single();
+        if (convErr || !conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+
+        const lead = await getLeadById(conv.lead_id);
+        if (!lead?.crm_deal_id) {
+            return res.status(400).json({ error: 'Essa conversa não tem deal vinculado no Pipedrive.' });
+        }
+
+        // Token do user logado (fallback global) — pra atividade aparecer como criada por ele
+        let token = process.env.PIPEDRIVE_API_TOKEN;
+        if (req.user?.id) {
+            try {
+                const { data: pu } = await supabase
+                    .from('platform_users')
+                    .select('pipedrive_api_token')
+                    .eq('id', req.user.id)
+                    .single();
+                if (pu?.pipedrive_api_token) token = pu.pipedrive_api_token;
+            } catch { /* fallback global */ }
+        }
+
+        const leadName = lead.name || lead.phone || 'Lead';
+        const activity = await createWhatsAppActivity({
+            dealId: lead.crm_deal_id,
+            personId: lead.crm_person_id || null,
+            subject: `WhatsApp ${tag} — ${leadName}`,
+            transcript: '',
+            done: true,
+            tokenOverride: token,
+        });
+
+        logger.info('Manual WhatsApp activity created', {
+            conversation_id: conv.id,
+            deal_id: lead.crm_deal_id,
+            tag,
+            user_id: req.user?.id || null,
+        });
+
+        res.json({ success: true, tag, tag_label: WA_TAG_LABELS[tag], activity_id: activity?.id || null });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
