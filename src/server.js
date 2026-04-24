@@ -100,22 +100,33 @@ app.get('/api/health', async (req, res) => {
     try {
         const DSN     = process.env.UNIPILE_DSN;
         const API_KEY = process.env.UNIPILE_API_KEY;
-        const ACCT_ID = process.env.UNIPILE_ACCOUNT_ID;
 
-        if (DSN && API_KEY && ACCT_ID) {
-            const r = await fetch(`https://${DSN}/api/v1/accounts/${ACCT_ID}`, {
+        if (DSN && API_KEY) {
+            // Lista todas as contas WhatsApp e considera saudável se pelo menos uma
+            // está com status OK em sources[]. Não depende de UNIPILE_ACCOUNT_ID
+            // (que fica desatualizado quando números são reconectados/removidos).
+            const r = await fetch(`https://${DSN}/api/v1/accounts`, {
                 headers: { 'X-API-KEY': API_KEY },
-                signal:  AbortSignal.timeout(5000)
+                signal: AbortSignal.timeout(6000),
             });
             if (r.ok) {
-                const acc = await r.json();
-                // Unipile retorna o status real em sources[0].status (ex: "OK").
-                // Os campos top-level connection_status/status ficam undefined nesse endpoint.
-                const sourceStatus = Array.isArray(acc.sources) && acc.sources.length > 0
-                    ? acc.sources[0].status
-                    : null;
-                waStatus = acc.connection_status || acc.status || sourceStatus || 'unknown';
-                waConnected = /^(ok|connected|running|ok_for_now)$/i.test(waStatus);
+                const data = await r.json();
+                const items = data.items || (Array.isArray(data) ? data : []);
+                const waAccounts = items.filter(a =>
+                    (a.type || a.provider || '').toUpperCase() === 'WHATSAPP'
+                );
+                const statuses = waAccounts.map(a =>
+                    (Array.isArray(a.sources) && a.sources[0]?.status)
+                    || a.connection_status
+                    || a.status
+                    || 'unknown'
+                );
+                const okRx = /^(ok|connected|running|ok_for_now)$/i;
+                const anyOk = statuses.some(s => okRx.test(s));
+                waConnected = anyOk;
+                waStatus = anyOk
+                    ? 'OK'
+                    : (statuses.find(s => /credentials|error/i.test(s)) || statuses[0] || 'unknown');
             }
         }
     } catch {
