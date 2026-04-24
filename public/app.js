@@ -2375,7 +2375,8 @@ function switchSettingsTab(tabId) {
     document.querySelectorAll('.settings-tab-panel').forEach(p => {
         const isActive = p.id === `stab-${tabId}`;
         p.classList.toggle('active', isActive);
-        p.style.display = isActive ? 'block' : 'none';
+        // Limpa inline display — deixa o CSS controlar via .active (flex) vs default (none)
+        p.style.display = '';
     });
 
     if (tabId === 'users') loadUsersList();
@@ -2498,6 +2499,10 @@ function populatePermissions(perms) {
     if (inboundCb) inboundCb.checked = types.includes('inbound');
     if (prospCb) prospCb.checked = types.includes('prospecting');
 
+    // Apollo enrichment permission (per-user)
+    const apolloCb = document.getElementById('uf-perm-apollo');
+    if (apolloCb) apolloCb.checked = !!perms.apollo_enabled;
+
     // WhatsApp accounts
     const waContainer = document.getElementById('uf-wa-accounts');
     if (!waContainer) return;
@@ -2529,7 +2534,9 @@ function getPermissionsFromForm() {
         waAccounts.push(cb.value);
     });
 
-    return { conversation_types: types, whatsapp_accounts: waAccounts };
+    const apolloEnabled = !!document.getElementById('uf-perm-apollo')?.checked;
+
+    return { conversation_types: types, whatsapp_accounts: waAccounts, apollo_enabled: apolloEnabled };
 }
 
 function populatePdUsersDropdown(selectedId) {
@@ -2895,14 +2902,19 @@ async function searchDeals() {
 // Cache do toggle Apollo (invalida após 60s pra pegar mudança de admin razoavelmente rápido)
 let _apolloEnabledCache = { value: null, ts: 0 };
 async function _getApolloEnabled() {
+    // Feature ativa = toggle global admin + (Admin OU user com permissions.apollo_enabled)
+    const isAdmin = currentUser?.role === 'Admin';
+    const userAllowed = !!currentUser?.permissions?.apollo_enabled;
+    if (!isAdmin && !userAllowed) return false;
+
     if (_apolloEnabledCache.value !== null && (Date.now() - _apolloEnabledCache.ts) < 60_000) {
         return _apolloEnabledCache.value;
     }
     try {
         const data = await apiFetch('/api/settings');
-        const enabled = !!data?.settings?.apollo_enabled;
-        _apolloEnabledCache = { value: enabled, ts: Date.now() };
-        return enabled;
+        const globalEnabled = !!data?.settings?.apollo_enabled;
+        _apolloEnabledCache = { value: globalEnabled, ts: Date.now() };
+        return globalEnabled;
     } catch {
         return false;
     }
@@ -2916,8 +2928,29 @@ function renderDealContactRow(c, apolloEnabled) {
     const roleLine = roleParts.length > 0
         ? `<div class="deal-contact-role">${roleParts.join(' · ')}</div>`
         : '';
+
+    // Sem telefone → card não-clicável, botão "Extrair número" se Apollo disponível
+    if (phones.length === 0) {
+        const extractBtn = apolloEnabled
+            ? `<button class="btn-apollo-enrich" type="button" data-action="apollo-extract-phone" data-person-id="${c.id}" data-person-name="${escHtml(c.name)}" title="Garimpar número com Apollo (1 crédito)">🔍 Extrair número</button>`
+            : `<span class="deal-contact-nophone">Sem número</span>`;
+        return `
+            <div class="deal-contact-item deal-contact-no-phone" data-person-id="${c.id}" data-name="${escHtml(c.name)}">
+                <div class="deal-contact-info">
+                    <div class="deal-contact-name">${escHtml(c.name)}</div>
+                    ${roleLine}
+                    <div class="deal-contact-phone-empty">— sem telefone no Pipedrive —</div>
+                </div>
+                <div class="deal-contact-actions">
+                    ${extractBtn}
+                </div>
+            </div>
+        `;
+    }
+
+    // Com telefone: card clicável (inicia conversa) + botão Apollo pra enriquecer
     const apolloBtn = apolloEnabled
-        ? `<button class="btn-apollo-enrich" type="button" data-action="apollo-enrich" data-person-id="${c.id}" data-person-name="${escHtml(c.name)}" title="Descobrir dados com Apollo (1 crédito)">🔍 Apollo</button>`
+        ? `<button class="btn-apollo-enrich" type="button" data-action="apollo-enrich" data-person-id="${c.id}" data-person-name="${escHtml(c.name)}" title="Enriquecer dados com Apollo (1 crédito)">🔍 Apollo</button>`
         : '';
     return phones.map(phone => `
         <div class="deal-contact-item deal-contact-clickable" data-person-id="${c.id}" data-phone="${escHtml(phone)}" data-name="${escHtml(c.name)}">
@@ -2986,13 +3019,21 @@ async function openDealContacts(dealId) {
         const apolloEnabled = await _getApolloEnabled();
         list.innerHTML = contacts.map(c => renderDealContactRow(c, apolloEnabled)).join('');
 
-        // Click = seleciona e inicia conversa direto (botão Apollo tem ação separada)
+        // Click = seleciona e inicia conversa direto (botões Apollo têm ação separada)
         list.onclick = async (e) => {
-            // Apollo: intercepta antes do fluxo de "iniciar conversa"
-            const apolloBtn = e.target.closest('[data-action="apollo-enrich"]');
-            if (apolloBtn) {
+            // Apollo: enriquecer dados (contato que já tem telefone)
+            const enrichBtn = e.target.closest('[data-action="apollo-enrich"]');
+            if (enrichBtn) {
                 e.stopPropagation();
-                await apolloEnrichPerson(apolloBtn.dataset.personId, apolloBtn.dataset.personName, apolloBtn);
+                await apolloEnrichPerson(enrichBtn.dataset.personId, enrichBtn.dataset.personName, enrichBtn);
+                return;
+            }
+
+            // Apollo: extrair número (contato sem telefone no Pipedrive)
+            const extractBtn = e.target.closest('[data-action="apollo-extract-phone"]');
+            if (extractBtn) {
+                e.stopPropagation();
+                await apolloEnrichPerson(extractBtn.dataset.personId, extractBtn.dataset.personName, extractBtn);
                 return;
             }
 
