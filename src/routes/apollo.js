@@ -6,7 +6,8 @@
  * o Admin pode alterar (via /api/settings).
  */
 import { Router } from 'express';
-import { getSettingValue } from '../services/supabase.js';
+import { getSettingValue, updateLead, normalizePhone } from '../services/supabase.js';
+import supabase from '../services/supabase.js';
 import { isApolloConfigured, enrichPerson } from '../services/apollo.js';
 import { pdGet, pdPut } from '../services/pipedrive.js';
 import logger from '../services/logger.js';
@@ -128,13 +129,45 @@ router.post('/apollo/enrich-and-save/:person_id', async (req, res) => {
         // (o cliente pode adicionar um campo custom e mapear no futuro)
 
         if (Object.keys(updates).length === 0) {
-            return res.json({ matched: true, updated: {}, person, note: 'Apollo encontrou dados, mas nenhum campo vazio para preencher.' });
+            return res.json({ matched: true, updated: {}, supabase_updated: null, person, note: 'Apollo encontrou dados, mas nenhum campo vazio para preencher.' });
         }
 
         await pdPut(`/persons/${personId}`, updates);
         logger.info('Apollo enrich-and-save updated Pipedrive person', { personId, fields: Object.keys(updates) });
 
-        res.json({ matched: true, updated: updates, person });
+        // Também atualiza lead no Supabase se existir (campos vazios apenas)
+        let supabaseUpdated = null;
+        try {
+            const { data: lead } = await supabase
+                .from('leads')
+                .select('id, name, phone, company_name')
+                .eq('crm_person_id', String(personId))
+                .limit(1)
+                .maybeSingle();
+
+            if (lead) {
+                const leadUpdates = {};
+                if ((!lead.phone || lead.phone.length < 6) && updates.phone?.[0]?.value) {
+                    leadUpdates.phone = normalizePhone(updates.phone[0].value);
+                }
+                if (!lead.company_name && current.org_name) {
+                    leadUpdates.company_name = current.org_name;
+                }
+                if (!lead.name && person.name) {
+                    leadUpdates.name = person.name;
+                }
+                if (Object.keys(leadUpdates).length > 0) {
+                    await updateLead(lead.id, leadUpdates);
+                    supabaseUpdated = { lead_id: lead.id, fields: Object.keys(leadUpdates) };
+                    logger.info('Apollo enrich-and-save updated Supabase lead', supabaseUpdated);
+                }
+            }
+        } catch (err) {
+            // Sync opcional — não quebra o fluxo se falhar
+            logger.warn('Apollo: supabase lead sync failed', { error: err.message, personId });
+        }
+
+        res.json({ matched: true, updated: updates, supabase_updated: supabaseUpdated, person });
     } catch (err) {
         res.status(502).json({ error: err.message });
     }
