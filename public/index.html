@@ -639,26 +639,27 @@
                 <div class="settings-section admin-section" id="section-bot-mode">
                     <h4 class="settings-section-title">🧠 Modo do Chatbot</h4>
                     <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Define como o bot trata novas conversas no WhatsApp.</p>
-                    <div class="form-group">
-                        <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;cursor:pointer">
-                            <input type="radio" name="bot-mode" value="ai" id="bot-mode-ai" checked style="margin-top:3px;accent-color:#00E5FF" />
-                            <span>
-                                <b>Agente IA</b> — LLM qualifica o lead com perguntas naturais.
-                                <span style="display:block;font-size:11px;color:var(--text-muted)">Usa Gemini/Claude/NVIDIA conforme configurado nas env vars.</span>
-                            </span>
+                    <div class="bot-mode-options">
+                        <label class="bot-mode-option">
+                            <input type="radio" name="bot-mode" value="ai" id="bot-mode-ai" checked />
+                            <div class="bot-mode-text">
+                                <div class="bot-mode-title">Agente IA</div>
+                                <div class="bot-mode-desc">LLM qualifica o lead com perguntas naturais. Usa Gemini/Claude/NVIDIA conforme configurado nas env vars.</div>
+                            </div>
                         </label>
-                        <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;cursor:pointer">
-                            <input type="radio" name="bot-mode" value="manual" id="bot-mode-manual" style="margin-top:3px;accent-color:#00E5FF" />
-                            <span>
-                                <b>Manual (simples)</b> — Cumprimenta, pergunta Comercial vs OPEC, pede nome/cargo/empresa/site em 1 mensagem.
-                                <span style="display:block;font-size:11px;color:var(--text-muted)">Mini-LLM só extrai os campos. Sem conversação livre.</span>
-                            </span>
+                        <label class="bot-mode-option">
+                            <input type="radio" name="bot-mode" value="manual" id="bot-mode-manual" />
+                            <div class="bot-mode-text">
+                                <div class="bot-mode-title">Manual (simples)</div>
+                                <div class="bot-mode-desc">Cumprimenta, pergunta Comercial vs OPEC, pede nome/cargo/empresa/site em 1 mensagem. Mini-LLM só extrai os campos.</div>
+                            </div>
                         </label>
-                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
-                            <input type="radio" name="bot-mode" value="off" id="bot-mode-off" style="margin-top:3px;accent-color:#00E5FF" />
-                            <span>
-                                <b>Desligado</b> — Bot não responde. Toda conversa cai direto na fila do atendente.
-                            </span>
+                        <label class="bot-mode-option">
+                            <input type="radio" name="bot-mode" value="off" id="bot-mode-off" />
+                            <div class="bot-mode-text">
+                                <div class="bot-mode-title">Desligado</div>
+                                <div class="bot-mode-desc">Bot não responde. Toda conversa cai direto na fila do atendente.</div>
+                            </div>
                         </label>
                     </div>
                 </div>
@@ -741,7 +742,7 @@
         </div>
 
         <!-- ABA USUARIOS (Admin only) -->
-        <div class="settings-tab-panel" id="stab-users" style="display:none">
+        <div class="settings-tab-panel" id="stab-users">
             <div class="modal-body" style="padding:24px">
 
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
@@ -802,6 +803,14 @@
                                 <span style="font-size:11px;color:var(--text-muted)">Carregando contas...</span>
                             </div>
                             <span style="font-size:11px;color:var(--text-muted)">Admin usa todas. Para Usuário, marque as contas que pode usar para enviar.</span>
+                        </div>
+                        <div class="form-group" style="grid-column:1/-1">
+                            <label>Permissão Apollo</label>
+                            <label class="perm-check">
+                                <input type="checkbox" id="uf-perm-apollo" />
+                                Permitir garimpo de contatos com Apollo
+                            </label>
+                            <span style="font-size:11px;color:var(--text-muted)">Libera o botão 🔍 Apollo na lista de contatos do deal. Cada uso consome 1 crédito. Admin também precisa ter a feature habilitada em Configurações.</span>
                         </div>
                     </div>
                     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">

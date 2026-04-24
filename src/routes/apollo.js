@@ -18,9 +18,16 @@ async function ensureEnabled(req, res) {
         res.status(503).json({ error: 'Apollo não configurado neste ambiente.' });
         return false;
     }
-    const enabled = await getSettingValue('apollo_enabled', false);
-    if (!enabled) {
-        res.status(403).json({ error: 'Enriquecimento Apollo está desabilitado. Admin pode habilitar em Configurações.' });
+    const globalEnabled = await getSettingValue('apollo_enabled', false);
+    if (!globalEnabled) {
+        res.status(403).json({ error: 'Enriquecimento Apollo está desabilitado globalmente. Admin pode habilitar em Configurações.' });
+        return false;
+    }
+    // Admin sempre pode. Para não-Admin, requer permissions.apollo_enabled.
+    const isAdmin = req.user?.role === 'Admin';
+    const userAllowed = !!req.user?.permissions?.apollo_enabled;
+    if (!isAdmin && !userAllowed) {
+        res.status(403).json({ error: 'Seu perfil não tem permissão para usar o Apollo. Fale com o administrador.' });
         return false;
     }
     return true;
@@ -97,7 +104,7 @@ router.post('/apollo/enrich-and-save/:person_id', async (req, res) => {
 
         if (!person) return res.json({ matched: false, updated: {} });
 
-        // Monta update só pra campos vazios
+        // Monta update só pra campos vazios — nunca sobrescreve curadoria manual
         const updates = {};
         if (!current.job_title && person.title) updates.job_title = person.title;
 
@@ -105,6 +112,16 @@ router.post('/apollo/enrich-and-save/:person_id', async (req, res) => {
         const hasEmail = (current.email || []).some(e => e.value && e.value.trim());
         if (!hasEmail && person.email) {
             updates.email = [{ value: person.email, primary: true, label: 'work' }];
+        }
+
+        // Telefone: só adiciona se Pipedrive não tem nenhum número válido (>5 dígitos)
+        const hasPhone = (current.phone || []).some(p => p.value && String(p.value).length > 5);
+        if (!hasPhone && Array.isArray(person.phone_numbers) && person.phone_numbers.length > 0) {
+            updates.phone = person.phone_numbers.slice(0, 3).map((num, i) => ({
+                value: num,
+                primary: i === 0,
+                label: 'work',
+            }));
         }
 
         // LinkedIn: Pipedrive guarda em campos customizados → deixa fora por default

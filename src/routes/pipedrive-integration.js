@@ -112,22 +112,25 @@ router.get('/pipedrive/deal/:id/contacts', async (req, res) => {
             addPerson(pid);
         }
 
-        // Busca dados completos de cada person
+        // Busca dados completos de cada person.
+        // Retorna TODOS os participantes (com ou sem telefone) — quem não tem
+        // telefone ganha botão "🔍 Extrair número" no front (via Apollo).
         for (const pid of seenIds) {
             try {
                 const pData = await pdGet(`/persons/${pid}`);
                 const person = pData?.data;
                 if (!person) continue;
 
-                const phones = (person.phone || []).filter(p => p.value && p.value.length > 5);
-                if (phones.length === 0) continue; // Sem telefone, não serve para WhatsApp
+                const phones = (person.phone || [])
+                    .filter(p => p.value && p.value.length > 5)
+                    .map(p => p.value);
 
                 contacts.push({
                     id: person.id,
                     name: person.name,
                     job_title: person.job_title || null,
                     org_name: person.org_name || null,
-                    phones: phones.map(p => p.value),
+                    phones,
                     email: person.email?.[0]?.value || null,
                     label_ids: person.label_ids || [],
                 });
