@@ -167,9 +167,22 @@ export async function getInbox({
 
     // Filtro por usuário: Admin vê tudo (com filtro opcional). Não-Admin vê só
     // conversas dos números WhatsApp atribuídos a ele em permissions.whatsapp_accounts.
+    //
+    // Quando Admin filtra por um usuário específico (filter_user_id), queremos ver
+    // as conversas dos NÚMEROS vinculados àquele usuário (não assigned_user_id, que
+    // é atribuição manual e quase nunca usada).
     if (role === 'Admin') {
         if (filter_user_id) {
-            query = query.eq('assigned_user_id', filter_user_id);
+            const { data: targetUser } = await supabase
+                .from('platform_users')
+                .select('permissions')
+                .eq('id', filter_user_id)
+                .maybeSingle();
+            const targetAccounts = targetUser?.permissions?.whatsapp_accounts || [];
+            if (targetAccounts.length === 0) {
+                return []; // user não tem número atribuído
+            }
+            query = query.in('whatsapp_account_id', targetAccounts);
         }
         // Sem filter_user_id, Admin vê tudo
     } else {
