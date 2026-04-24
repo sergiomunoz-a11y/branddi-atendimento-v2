@@ -109,8 +109,13 @@ app.get('/api/health', async (req, res) => {
             });
             if (r.ok) {
                 const acc = await r.json();
-                waStatus    = acc.connection_status || acc.status || 'unknown';
-                waConnected = (waStatus === 'OK' || waStatus === 'CONNECTED');
+                // Unipile retorna o status real em sources[0].status (ex: "OK").
+                // Os campos top-level connection_status/status ficam undefined nesse endpoint.
+                const sourceStatus = Array.isArray(acc.sources) && acc.sources.length > 0
+                    ? acc.sources[0].status
+                    : null;
+                waStatus = acc.connection_status || acc.status || sourceStatus || 'unknown';
+                waConnected = /^(ok|connected|running|ok_for_now)$/i.test(waStatus);
             }
         }
     } catch {
