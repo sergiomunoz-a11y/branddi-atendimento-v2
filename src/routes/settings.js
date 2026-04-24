@@ -28,6 +28,8 @@ const DEFAULTS = {
     pipedrive_owner_name:    'Não atribuído',
     // Chatbot mode
     bot_mode: 'ai', // 'ai' | 'manual' | 'off'
+    // Apollo enrichment (consome créditos Apollo a cada chamada)
+    apollo_enabled: false,
 };
 
 // ─── GET /api/settings/my-profile — Perfil pessoal do user logado ─────
@@ -90,6 +92,7 @@ router.post('/settings', requireAuth, requireRole('Admin'), async (req, res) => 
             'pipedrive_stage_id', 'pipedrive_stage_name',
             'pipedrive_owner_id', 'pipedrive_owner_name',
             'bot_mode',
+            'apollo_enabled',
         ];
         for (const key of allowed) {
             if (req.body[key] !== undefined) {

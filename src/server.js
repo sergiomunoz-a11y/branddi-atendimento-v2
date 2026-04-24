@@ -25,6 +25,7 @@ import settingsRouter          from './routes/settings.js';
 import authRouter              from './routes/auth.js';
 import usersRouter             from './routes/users.js';
 import pipedriveIntRouter      from './routes/pipedrive-integration.js';
+import apolloRouter            from './routes/apollo.js';
 import { requireAuth }         from './middleware/auth.js';
 
 import chatbotRouter               from './routes/chatbot.js';
@@ -154,6 +155,7 @@ app.use('/api', whatsappAccountsRouter);
 app.use('/api', settingsRouter);
 app.use('/api', usersRouter);
 app.use('/api', pipedriveIntRouter);
+app.use('/api', apolloRouter);
 app.use('/api', chatbotRouter);
 
 // ─── SPA Fallback — serve index.html para rotas não-API ──────────────

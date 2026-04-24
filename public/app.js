@@ -2323,6 +2323,10 @@ async function openSettingsModal() {
             const botModeEl = document.getElementById(`bot-mode-${botMode}`);
             if (botModeEl) botModeEl.checked = true;
 
+            // Apollo enrichment (admin only)
+            const apolloEl = document.getElementById('settings-apollo-enabled');
+            if (apolloEl) apolloEl.checked = !!_settingsData.apollo_enabled;
+
             // Bot 24h
             const awayEnabledEl = document.getElementById('settings-away-enabled');
             if (awayEnabledEl) awayEnabledEl.checked = !!_settingsData.away_enabled;
@@ -2673,6 +2677,7 @@ async function saveSettings() {
                     away_enabled: document.getElementById('settings-away-enabled')?.checked || false,
                     away_minutes: parseInt(document.getElementById('settings-away-minutes')?.value) || 10,
                     away_message: document.getElementById('settings-away-message')?.value.trim() || '',
+                    apollo_enabled: document.getElementById('settings-apollo-enabled')?.checked || false,
                     pipedrive_pipeline_id:   parseInt(pipelineSel.value) || null,
                     pipedrive_pipeline_name: pipelineOpt?.text || '',
                     pipedrive_stage_id:      parseInt(stageSel.value) || null,
@@ -2887,6 +2892,74 @@ async function searchDeals() {
     }
 }
 
+// Cache do toggle Apollo (invalida após 60s pra pegar mudança de admin razoavelmente rápido)
+let _apolloEnabledCache = { value: null, ts: 0 };
+async function _getApolloEnabled() {
+    if (_apolloEnabledCache.value !== null && (Date.now() - _apolloEnabledCache.ts) < 60_000) {
+        return _apolloEnabledCache.value;
+    }
+    try {
+        const data = await apiFetch('/api/settings');
+        const enabled = !!data?.settings?.apollo_enabled;
+        _apolloEnabledCache = { value: enabled, ts: Date.now() };
+        return enabled;
+    } catch {
+        return false;
+    }
+}
+
+function renderDealContactRow(c, apolloEnabled) {
+    const phones = c.phones || [];
+    const roleParts = [];
+    if (c.job_title) roleParts.push(escHtml(c.job_title));
+    if (c.org_name)  roleParts.push(escHtml(c.org_name));
+    const roleLine = roleParts.length > 0
+        ? `<div class="deal-contact-role">${roleParts.join(' · ')}</div>`
+        : '';
+    const apolloBtn = apolloEnabled
+        ? `<button class="btn-apollo-enrich" type="button" data-action="apollo-enrich" data-person-id="${c.id}" data-person-name="${escHtml(c.name)}" title="Descobrir dados com Apollo (1 crédito)">🔍 Apollo</button>`
+        : '';
+    return phones.map(phone => `
+        <div class="deal-contact-item deal-contact-clickable" data-person-id="${c.id}" data-phone="${escHtml(phone)}" data-name="${escHtml(c.name)}">
+            <div class="deal-contact-info">
+                <div class="deal-contact-name">${escHtml(c.name)}</div>
+                ${roleLine}
+                <div class="deal-contact-phone">${escHtml(phone)}</div>
+            </div>
+            <div class="deal-contact-actions">
+                ${apolloBtn}
+                <span class="deal-result-action">Iniciar →</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function apolloEnrichPerson(personId, personName, btnEl) {
+    if (!personId) return;
+    const originalHtml = btnEl?.innerHTML;
+    try {
+        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ Enriquecendo...'; }
+        const res = await apiFetch('/api/apollo/enrich-and-save/' + personId, { method: 'POST' });
+        if (!res.matched) {
+            toast('Apollo: nenhum match encontrado para esse contato.', 'warning');
+            return;
+        }
+        const updated = res.updated || {};
+        const fields = Object.keys(updated);
+        if (fields.length === 0) {
+            toast('Apollo: dados encontrados, mas os campos já estavam preenchidos no Pipedrive.', 'info');
+        } else {
+            toast(`Apollo: ${fields.join(', ')} atualizado(s) no Pipedrive ✓`, 'success');
+        }
+        // Recarrega a lista pra mostrar o cargo recém descoberto
+        if (_selectedDealForOutbound) openDealContacts(_selectedDealForOutbound);
+    } catch (err) {
+        toast('Erro Apollo: ' + err.message, 'error');
+    } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = originalHtml; }
+    }
+}
+
 async function openDealContacts(dealId) {
     const modal = document.getElementById('deal-contacts-modal');
     const list = document.getElementById('deal-contacts-list');
@@ -2910,22 +2983,19 @@ async function openDealContacts(dealId) {
             return;
         }
 
-        list.innerHTML = contacts.map(c => {
-            const phones = c.phones || [];
-            return phones.map(phone => `
-                <div class="deal-contact-item deal-contact-clickable" data-person-id="${c.id}" data-phone="${escHtml(phone)}" data-name="${escHtml(c.name)}">
-                    <div class="deal-contact-info">
-                        <div class="deal-contact-name">${escHtml(c.name)}</div>
-                        ${c.job_title ? `<div class="deal-contact-role">${escHtml(c.job_title)} — ${escHtml(c.org_name || '')}</div>` : ''}
-                        <div class="deal-contact-phone">${escHtml(phone)}</div>
-                    </div>
-                    <span class="deal-result-action">Iniciar →</span>
-                </div>
-            `).join('');
-        }).join('');
+        const apolloEnabled = await _getApolloEnabled();
+        list.innerHTML = contacts.map(c => renderDealContactRow(c, apolloEnabled)).join('');
 
-        // Click = seleciona e inicia conversa direto
+        // Click = seleciona e inicia conversa direto (botão Apollo tem ação separada)
         list.onclick = async (e) => {
+            // Apollo: intercepta antes do fluxo de "iniciar conversa"
+            const apolloBtn = e.target.closest('[data-action="apollo-enrich"]');
+            if (apolloBtn) {
+                e.stopPropagation();
+                await apolloEnrichPerson(apolloBtn.dataset.personId, apolloBtn.dataset.personName, apolloBtn);
+                return;
+            }
+
             const item = e.target.closest('.deal-contact-clickable');
             if (!item) return;
 
