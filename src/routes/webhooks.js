@@ -6,8 +6,11 @@ import { Router } from 'express';
 import {
     createLead, createConversation, findLeadByPhone, normalizePhone
 } from '../services/supabase.js';
+import supabase from '../services/supabase.js';
 import { startNewChat } from '../services/unipile.js';
 import { queueLeadSync } from '../services/crm-sync.js';
+import { pdGet, pdPut } from '../services/pipedrive.js';
+import { syncLeadFromApollo } from './apollo.js';
 import logger from '../services/logger.js';
 
 const router = Router();
@@ -113,6 +116,92 @@ router.post('/webhook/form', async (req, res) => {
 router.post('/webhook/test', (req, res) => {
     logger.info('Webhook test received', { body: req.body });
     res.json({ received: true, body: req.body });
+});
+
+// ─── Webhook Apollo: recebe número revelado (reveal_phone_number async) ─
+// URL: /api/webhooks/apollo?ref=<uuid>
+// Proteção: UUID v4 (122 bits de entropia) só existe em apollo_enrichments
+// quando disparamos. Rejeitamos refs desconhecidos ou já processados.
+router.post('/webhooks/apollo', async (req, res) => {
+    const ref = req.query?.ref;
+    if (!ref) return res.status(400).json({ error: 'ref obrigatório' });
+
+    try {
+        // Busca row pending
+        const { data: row, error } = await supabase
+            .from('apollo_enrichments')
+            .select('ref, pipedrive_person_id, status')
+            .eq('ref', ref)
+            .maybeSingle();
+        if (error || !row) {
+            logger.warn('Apollo webhook: ref desconhecido', { ref });
+            return res.status(404).json({ error: 'ref não encontrado' });
+        }
+        if (row.status !== 'pending') {
+            logger.info('Apollo webhook: ref já processado', { ref, status: row.status });
+            return res.json({ already_processed: true });
+        }
+
+        // Extrai número do payload (Apollo schema)
+        const body = req.body || {};
+        const phoneRaw =
+            body.sanitized_number
+            || body.phone_number
+            || body?.contact?.sanitized_phone
+            || body?.contact?.phone_numbers?.[0]?.sanitized_number
+            || body?.contact?.phone_numbers?.[0]?.raw_number
+            || body?.person?.phone_numbers?.[0]?.sanitized_number
+            || body?.person?.phone_numbers?.[0]?.raw_number
+            || null;
+
+        if (!phoneRaw) {
+            // Apollo entregou webhook mas sem número — marca not_found pro resultado final
+            await supabase.from('apollo_enrichments')
+                .update({
+                    status: 'not_found',
+                    result: body,
+                    completed_at: new Date().toISOString(),
+                })
+                .eq('ref', ref);
+            logger.info('Apollo webhook: reveal sem número', { ref });
+            return res.json({ received: true, phone: null });
+        }
+
+        // Salva no Pipedrive (se vazio) e no Supabase lead (se vazio)
+        const personId = row.pipedrive_person_id;
+        let pdUpdated = null;
+        try {
+            const pd = await pdGet(`/persons/${personId}`);
+            const person = pd?.data;
+            if (person) {
+                const hasPhone = (person.phone || []).some(p => p.value && String(p.value).length > 5);
+                if (!hasPhone) {
+                    await pdPut(`/persons/${personId}`, {
+                        phone: [{ value: phoneRaw, primary: true, label: 'mobile' }],
+                    });
+                    pdUpdated = true;
+                }
+                await syncLeadFromApollo(personId, person, null, { includePhone: true, phone: phoneRaw });
+            }
+        } catch (err) {
+            logger.warn('Apollo webhook: erro salvando no Pipedrive', { ref, personId, error: err.message });
+        }
+
+        await supabase.from('apollo_enrichments')
+            .update({
+                status: 'completed',
+                phone: phoneRaw,
+                result: body,
+                completed_at: new Date().toISOString(),
+            })
+            .eq('ref', ref);
+
+        logger.info('Apollo webhook: número salvo', { ref, personId, phone: phoneRaw, pdUpdated });
+        res.json({ received: true, phone: phoneRaw, pipedrive_updated: !!pdUpdated });
+    } catch (err) {
+        logger.error('Apollo webhook error', { ref, error: err.message });
+        res.status(500).json({ error: err.message });
+    }
 });
 
 export default router;
