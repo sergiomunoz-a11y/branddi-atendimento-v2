@@ -205,17 +205,25 @@ async function processChat(chat) {
                 : (lead.origin === 'form' ? 'welcome' : 'human');
 
             conversation = await createConversation({
-                lead_id:          lead.id,
-                whatsapp_chat_id: chat.id,
-                channel:          'whatsapp_direct',
-                status:           weStarted ? 'in_progress' : 'waiting',
-                chatbot_stage:    botStage,
-                last_message_at:  new Date().toISOString(),
+                lead_id:             lead.id,
+                whatsapp_chat_id:    chat.id,
+                whatsapp_account_id: chat.account_id || null,
+                channel:             'whatsapp_direct',
+                status:              weStarted ? 'in_progress' : 'waiting',
+                chatbot_stage:       botStage,
+                last_message_at:     new Date().toISOString(),
             });
 
             if (botStage === 'human') {
                 logger.info('Bot desativado para conversa', { phone, reason: weStarted ? 'outbound' : 'direct_contact', origin: lead.origin });
             }
+        }
+
+        // Self-heal: backfill whatsapp_account_id em conversas antigas (antes da migration 005).
+        // Roda uma vez por conversa — próxima passada do polling já não entra aqui.
+        if (!isNewConversation && !conversation.whatsapp_account_id && chat.account_id) {
+            await updateConversation(conversation.id, { whatsapp_account_id: chat.account_id });
+            conversation.whatsapp_account_id = chat.account_id;
         }
 
         // Busca mensagens: conversa nova → importa histórico recente; existente → só desde último poll

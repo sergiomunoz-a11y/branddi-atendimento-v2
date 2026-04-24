@@ -30,6 +30,7 @@ router.get('/inbox', async (req, res) => {
             role,
             user_id: userId,
             allowed_types: role === 'Admin' ? null : (permissions.conversation_types || []),
+            allowed_accounts: role === 'Admin' ? null : (permissions.whatsapp_accounts || []),
             filter_user_id: role === 'Admin' ? (filter_user_id || null) : null,
             archived: showArchived,
         });

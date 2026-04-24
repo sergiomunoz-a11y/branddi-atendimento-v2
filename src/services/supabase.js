@@ -133,6 +133,7 @@ export async function updateConversation(id, updates) {
 export async function getInbox({
     status, assigned_to, limit = 50,
     type, role, user_id, allowed_types,
+    allowed_accounts, // números WhatsApp que o não-Admin pode ver (permissions.whatsapp_accounts)
     filter_user_id, // Admin pode filtrar por usuário específico
     archived = false, // true = lista só arquivadas (Admin)
 } = {}) {
@@ -164,15 +165,20 @@ export async function getInbox({
         query = query.in('type', allowed_types);
     }
 
-    // Filtro por usuário: Admin vê tudo (com filtro opcional), demais só as próprias
+    // Filtro por usuário: Admin vê tudo (com filtro opcional). Não-Admin vê só
+    // conversas dos números WhatsApp atribuídos a ele em permissions.whatsapp_accounts.
     if (role === 'Admin') {
         if (filter_user_id) {
             query = query.eq('assigned_user_id', filter_user_id);
         }
         // Sem filter_user_id, Admin vê tudo
-    } else if (user_id) {
-        // Não-Admin: só conversas atribuídas a ele
-        query = query.eq('assigned_user_id', user_id);
+    } else {
+        const accounts = Array.isArray(allowed_accounts) ? allowed_accounts : [];
+        if (accounts.length === 0) {
+            // Sem números atribuídos = inbox vazio (regra de negócio explícita)
+            return [];
+        }
+        query = query.in('whatsapp_account_id', accounts);
     }
 
     if (assigned_to) {
