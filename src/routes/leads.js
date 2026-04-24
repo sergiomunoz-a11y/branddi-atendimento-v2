@@ -88,6 +88,33 @@ router.put('/leads/:id', async (req, res) => {
     }
 });
 
+// ─── POST /api/leads/:id/link-to-deal — Vincula lead a um deal existente do Pipedrive
+// Útil quando o número do WhatsApp não bate com nenhum phone no Pipedrive mas o SDR
+// sabe qual deal é (ex: errinho de digitação no Pipedrive, números duplicados, etc.)
+router.post('/leads/:id/link-to-deal', async (req, res) => {
+    try {
+        const { deal_id, person_id } = req.body || {};
+        if (!deal_id) return res.status(400).json({ error: 'deal_id obrigatório' });
+
+        // Valida que o deal existe no Pipedrive antes de salvar
+        try {
+            const d = await pdGet(`/deals/${deal_id}`);
+            if (!d?.data) return res.status(404).json({ error: 'Deal não encontrado no Pipedrive' });
+        } catch (err) {
+            return res.status(404).json({ error: 'Deal não encontrado no Pipedrive' });
+        }
+
+        const updates = { crm_deal_id: String(deal_id) };
+        if (person_id) updates.crm_person_id = String(person_id);
+
+        const lead = await updateLead(req.params.id, updates);
+        logger.info('Lead linked to Pipedrive deal', { lead_id: lead.id, deal_id, person_id });
+        res.json({ success: true, lead });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── POST /api/leads/:id/sync-crm — Sync IMEDIATO com Pipedrive ──────
 // Cria pessoa + org + deal no funil configurado nas Settings
 router.post('/leads/:id/sync-crm', async (req, res) => {

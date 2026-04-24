@@ -1206,6 +1206,12 @@ function renderLeadPanel(conv) {
         btnCreateDeal.onclick = () => syncLeadPanelPipedrive(lead.id, conv.id);
     }
 
+    // Botao vincular a deal existente
+    const btnLinkDeal = document.getElementById('btn-link-deal-lp');
+    if (btnLinkDeal) {
+        btnLinkDeal.onclick = () => toggleLinkDealSearch(lead.id);
+    }
+
     // Botao sync Pipedrive
     const btnSync = document.getElementById('btn-sync-pipedrive-lp');
     if (btnSync) {
@@ -1362,6 +1368,76 @@ function renderConvEvents() {
             </div>
         </div>
     `).join('');
+}
+
+// --- Vincular lead a deal existente (search manual) ---
+let _linkDealSearchTimer = null;
+function toggleLinkDealSearch(leadId) {
+    const box = document.getElementById('lp-link-deal-search');
+    if (!box) return;
+    const isOpen = box.style.display !== 'none';
+    box.style.display = isOpen ? 'none' : 'block';
+    if (isOpen) return;
+
+    const input = document.getElementById('lp-link-deal-input');
+    const results = document.getElementById('lp-link-deal-results');
+    if (input) {
+        input.value = '';
+        input.focus();
+        input.oninput = () => {
+            clearTimeout(_linkDealSearchTimer);
+            const q = input.value.trim();
+            if (q.length < 2) {
+                if (results) results.innerHTML = '';
+                return;
+            }
+            _linkDealSearchTimer = setTimeout(() => runLinkDealSearch(q, leadId), 300);
+        };
+    }
+}
+
+async function runLinkDealSearch(q, leadId) {
+    const results = document.getElementById('lp-link-deal-results');
+    if (!results) return;
+    results.innerHTML = '<div class="lp-muted" style="font-size:12px;padding:8px">Buscando...</div>';
+    try {
+        const data = await apiFetch(`/api/pipedrive/search-deals?q=${encodeURIComponent(q)}`);
+        const deals = data?.deals || [];
+        if (deals.length === 0) {
+            results.innerHTML = '<div class="lp-muted" style="font-size:12px;padding:8px">Nenhum deal encontrado</div>';
+            return;
+        }
+        results.innerHTML = deals.map(d => `
+            <div class="link-deal-result" data-deal-id="${d.id}" style="padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s">
+                <div style="font-weight:600;font-size:13px;color:var(--text-primary)">${escHtml(d.title)}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+                    ${escHtml(d.org_name)} · ${escHtml(d.person_name)}
+                    · <span style="color:${d.status === 'won' ? 'var(--green)' : d.status === 'lost' ? 'var(--red)' : 'var(--accent)'}">${escHtml(d.status_label)}</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted)">#${d.id} · ${escHtml(d.stage_name)} · ${escHtml(d.value)}</div>
+            </div>
+        `).join('');
+        results.querySelectorAll('.link-deal-result').forEach(el => {
+            el.addEventListener('click', () => linkLeadToDeal(leadId, el.dataset.dealId));
+        });
+    } catch (err) {
+        results.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px">Erro: ${escHtml(err.message)}</div>`;
+    }
+}
+
+async function linkLeadToDeal(leadId, dealId) {
+    if (!confirm(`Vincular esta conversa ao Deal #${dealId}?`)) return;
+    try {
+        await apiFetch(`/api/leads/${leadId}/link-to-deal`, {
+            method: 'POST',
+            body: JSON.stringify({ deal_id: parseInt(dealId) }),
+        });
+        toast(`✓ Conversa vinculada ao Deal #${dealId}`, 'success');
+        // Recarrega o painel lateral
+        if (currentConversation) renderLeadPanel(currentConversation);
+    } catch (err) {
+        toast(`Falha: ${err.message}`, 'error');
+    }
 }
 
 async function syncLeadPanelPipedrive(leadId, convId) {

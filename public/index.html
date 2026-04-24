@@ -185,9 +185,18 @@
                         </div>
                         <div id="lp-deal-notfound" style="display:none">
                             <p class="lp-muted">Nenhum deal vinculado.</p>
-                            <button class="btn-sm btn-primary" id="btn-create-deal-lp">
-                                <svg class="icon icon-sm"><use href="/icons.svg#icon-plus"></use></svg> Criar deal
-                            </button>
+                            <div style="display:flex;flex-direction:column;gap:8px">
+                                <button class="btn-sm btn-primary" id="btn-create-deal-lp">
+                                    <svg class="icon icon-sm"><use href="/icons.svg#icon-plus"></use></svg> Criar deal
+                                </button>
+                                <button class="btn-sm btn-outline" id="btn-link-deal-lp">
+                                    🔍 Vincular a deal existente
+                                </button>
+                            </div>
+                            <div id="lp-link-deal-search" style="display:none;margin-top:10px">
+                                <input type="text" id="lp-link-deal-input" class="sidebar-search" placeholder="Buscar por nome, empresa..." style="width:100%;margin-bottom:8px" />
+                                <div id="lp-link-deal-results" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
