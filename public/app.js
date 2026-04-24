@@ -135,6 +135,9 @@ function setupEventDelegation() {
             case 'toggle-user':
                 toggleUserActive(el.dataset.userId, el.dataset.activate === 'true');
                 break;
+            case 'delete-user-permanent':
+                deleteUserPermanent(el.dataset.userId, el.dataset.userName);
+                break;
             case 'open-history':
                 e.stopPropagation();
                 openHistoryMessages(id, el.dataset.name);
@@ -2457,9 +2460,23 @@ function renderUsersList(users) {
                     data-action="toggle-user" data-user-id="${u.id}" data-activate="${inactive}">
                     ${inactive ? '✅ Ativar' : '🚫 Desativar'}
                 </button>
+                ${inactive ? `<button class="btn-sm" style="padding:5px 10px;font-size:11px;border:1px solid #f04646;color:#ff8a8a;background:rgba(240,70,70,0.08)"
+                    data-action="delete-user-permanent" data-user-id="${u.id}" data-user-name="${escHtml(u.name || u.email)}"
+                    title="Apagar permanentemente do banco">🗑️</button>` : ''}
             </div>
         </div>`;
     }).join('');
+}
+
+async function deleteUserPermanent(userId, userName) {
+    if (!confirm(`⚠️ IRREVERSÍVEL\n\nApagar o usuário "${userName}" permanentemente do banco?`)) return;
+    try {
+        await apiFetch(`/api/users/${userId}/permanent`, { method: 'DELETE' });
+        toast('Usuário apagado permanentemente', 'success');
+        loadUsersList();
+    } catch (err) {
+        toast(`Falha ao apagar: ${err.message}`, 'error');
+    }
 }
 
 function openAddUserForm() {

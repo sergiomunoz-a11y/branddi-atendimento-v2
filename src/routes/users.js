@@ -128,6 +128,48 @@ router.delete('/users/:id', ...adminOnly, async (req, res) => {
     res.json({ ok: true });
 });
 
+// ─── DELETE /api/users/:id/permanent — apaga do banco (irreversível) ──
+// Só funciona se o user já estiver desativado (active=false). Protege contra
+// apagar acidentalmente um user ativo. Admin não pode apagar a si mesmo.
+router.delete('/users/:id/permanent', ...adminOnly, async (req, res) => {
+    const id = req.params.id;
+    if (id === req.user?.id) {
+        return res.status(400).json({ error: 'Você não pode apagar seu próprio usuário.' });
+    }
+
+    const { data: user, error: getErr } = await supabase
+        .from('platform_users')
+        .select('id, email, name, active')
+        .eq('id', id)
+        .maybeSingle();
+    if (getErr) return res.status(500).json({ error: getErr.message });
+    if (!user)  return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (user.active) {
+        return res.status(400).json({ error: 'Desative o usuário primeiro antes de apagar permanentemente.' });
+    }
+
+    // Checa se tem dados críticos vinculados que restringem o DELETE
+    const [conv, wa, scripts] = await Promise.all([
+        supabase.from('conversations').select('id', { count: 'exact', head: true }).eq('assigned_user_id', id),
+        supabase.from('whatsapp_accounts').select('unipile_account_id', { count: 'exact', head: true }).eq('connected_by_user_id', id),
+        supabase.from('scripts').select('id', { count: 'exact', head: true }).eq('owner_user_id', id),
+    ]);
+    const blockers = [];
+    if (conv.count)    blockers.push(`${conv.count} conversa(s) atribuída(s)`);
+    if (wa.count)      blockers.push(`${wa.count} número(s) WhatsApp`);
+    if (scripts.count) blockers.push(`${scripts.count} script(s)`);
+    if (blockers.length > 0) {
+        return res.status(409).json({
+            error: `Não é possível apagar — o usuário tem: ${blockers.join(', ')}. Reatribua antes.`,
+        });
+    }
+
+    const { error } = await supabase.from('platform_users').delete().eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    invalidateUserCache(id);
+    res.json({ ok: true, deleted: { id: user.id, email: user.email, name: user.name } });
+});
+
 // ─── GET /api/users/pipedrive-users — lista usuários do Pipedrive ────
 // Útil para o admin vincular um platform_user ao seu pipedrive_user_id
 router.get('/users/pipedrive-users', ...adminOnly, async (req, res) => {
