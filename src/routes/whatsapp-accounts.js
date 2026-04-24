@@ -8,6 +8,7 @@
  */
 import { Router } from 'express';
 import supabase from '../services/supabase.js';
+import { invalidateUserCache } from '../middleware/auth.js';
 import logger from '../services/logger.js';
 
 const router = Router();
@@ -191,6 +192,8 @@ async function addAccountToUserPermissions(userId, accountId) {
                 .from('platform_users')
                 .update({ permissions: perms, updated_at: new Date().toISOString() })
                 .eq('id', userId);
+            // Cache do middleware precisa cair fora pra a nova permissão valer já
+            invalidateUserCache(userId);
         }
     } catch { /* nao critico */ }
 }

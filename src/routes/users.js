@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import supabase from '../services/supabase.js';
 import { hashPassword } from '../services/auth.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requireRole, invalidateUserCache } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 
 const router = Router();
@@ -110,6 +110,8 @@ router.patch('/users/:id', ...adminOnly, async (req, res) => {
         .single();
 
     if (error) return res.status(500).json({ error: error.message });
+    // Invalida cache do user editado — a próxima request dele pega permissões/role atualizados
+    invalidateUserCache(req.params.id);
     res.json({ user: data });
 });
 
@@ -122,6 +124,7 @@ router.delete('/users/:id', ...adminOnly, async (req, res) => {
         .eq('id', req.params.id);
 
     if (error) return res.status(500).json({ error: error.message });
+    invalidateUserCache(req.params.id);
     res.json({ ok: true });
 });
 
