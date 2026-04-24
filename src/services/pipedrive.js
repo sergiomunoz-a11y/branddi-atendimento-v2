@@ -158,6 +158,30 @@ export async function findPersonByPhone(phone) {
     return null;
 }
 
+/**
+ * Busca uma Person no Pipedrive por email (único match).
+ * Retorna null se 0 ou mais de 1 match (evita escolher errado).
+ */
+export async function findPersonByEmail(email) {
+    if (!email) return null;
+    const res = await pdGet(`/persons/search?term=${encodeURIComponent(email)}&fields=email&exact_match=true&limit=5`);
+    const items = res.data?.items || [];
+    if (items.length === 1) return items[0].item;
+    return null;
+}
+
+/**
+ * Busca uma Person no Pipedrive por nome exato (único match).
+ * Retorna null se 0 ou mais de 1 — ambiguidade nunca deve gerar match automático.
+ */
+export async function findPersonByExactName(name) {
+    if (!name || name.length < 3) return null;
+    const res = await pdGet(`/persons/search?term=${encodeURIComponent(name)}&fields=name&exact_match=true&limit=5`);
+    const items = res.data?.items || [];
+    if (items.length === 1) return items[0].item;
+    return null;
+}
+
 // ─── Organization ─────────────────────────────────────────────────────
 
 export async function findOrCreateOrg(name) {

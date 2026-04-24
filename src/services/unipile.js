@@ -10,7 +10,9 @@ import {
 import { processChatbotMessage } from './chatbot-engine.js';
 import { isLLMBotAvailable } from './llm-bot.js';
 import { onInboundMessage } from './auto-activities.js';
-import { findPersonByPhone, getDealsForPerson } from './pipedrive.js';
+import { findPersonByPhone, findPersonByEmail, findPersonByExactName, getDealsForPerson } from './pipedrive.js';
+import { isApolloConfigured, matchPerson } from './apollo.js';
+import { getSettingValue } from './supabase.js';
 import whatsapp from '../providers/index.js';
 import logger from './logger.js';
 
@@ -26,6 +28,57 @@ let _lastPollTime    = Date.now() - 60_000;
 // Cache: unipile_account_id → { user_id, user_name, expires_at }
 const _accountOwnerCache = new Map();
 const ACCOUNT_OWNER_TTL_MS = 5 * 60_000;
+
+/**
+ * Cascata de estratégias pra achar a Person do Pipedrive sem exigir match
+ * exato de phone. Só aceita match UNÍVOCO — ambiguidade sempre retorna null.
+ *
+ * Strategies em ordem:
+ *   1. phone_exact          — variações BR (com/sem 9, com/sem 55)
+ *   2. name_exact           — nome do Unipile (único match)
+ *   3. apollo_email         — Apollo descobre email → search por email (único match)
+ *
+ * Apollo só roda se platform_settings.apollo_auto_match=true (controle de crédito).
+ */
+async function smartMatchPipedrivePerson({ phone, name }) {
+    // 1. Phone (já cobre variações BR via normalizePhoneTerms)
+    const byPhone = await findPersonByPhone(phone).catch(() => null);
+    if (byPhone) return { person: byPhone, strategy: 'phone_exact' };
+
+    // 2. Nome exato (só se Unipile trouxe nome real, não telefone)
+    if (name && !/^\+?\d[\d\s\-()]+$/.test(name.trim()) && name.length >= 3) {
+        const byName = await findPersonByExactName(name).catch(() => null);
+        if (byName) return { person: byName, strategy: 'name_exact' };
+    }
+
+    // 3. Apollo (opt-in)
+    try {
+        const autoMatchEnabled = await getSettingValue('apollo_auto_match', false);
+        if (!autoMatchEnabled || !isApolloConfigured()) return null;
+
+        const apolloResp = await matchPerson({
+            phone_number: phone,
+            name: (name && !/^\+?\d/.test(name)) ? name : undefined,
+        });
+        if (!apolloResp?.matched || !apolloResp.person) return null;
+
+        // Tenta email (mais preciso)
+        if (apolloResp.person.email) {
+            const byEmail = await findPersonByEmail(apolloResp.person.email).catch(() => null);
+            if (byEmail) return { person: byEmail, strategy: 'apollo_email' };
+        }
+
+        // Tenta nome descoberto pelo Apollo
+        if (apolloResp.person.name) {
+            const byApolloName = await findPersonByExactName(apolloResp.person.name).catch(() => null);
+            if (byApolloName) return { person: byApolloName, strategy: 'apollo_name' };
+        }
+    } catch (err) {
+        logger.warn('smartMatch Apollo step failed', { phone, error: err.message });
+    }
+
+    return null;
+}
 
 async function getAccountOwner(unipileAccountId) {
     if (!unipileAccountId) return null;
@@ -192,11 +245,20 @@ async function processChat(chat) {
                 });
             }
 
-            // Auto-match com Pipedrive (person + deals)
+            // Auto-match com Pipedrive (person + deals) — cascata conservadora:
+            // (1) phone exato / variações BR
+            // (2) nome exato do Unipile (só se match único)
+            // (3) Apollo (opt-in via setting apollo_auto_match): descobre email/nome
+            //     e tenta match por email no Pipedrive (único match)
             if (phone && !lead.crm_person_id) {
                 try {
-                    const pdPerson = await findPersonByPhone(phone);
-                    if (pdPerson) {
+                    const matchResult = await smartMatchPipedrivePerson({
+                        phone,
+                        name: contact.name,
+                    });
+
+                    if (matchResult?.person) {
+                        const pdPerson = matchResult.person;
                         const updates = {
                             crm_person_id: String(pdPerson.id),
                         };
@@ -208,7 +270,10 @@ async function processChat(chat) {
 
                         await updateLead(lead.id, updates);
                         lead = { ...lead, ...updates };
-                        logger.info('Auto-matched lead with Pipedrive', { phone, person_id: pdPerson.id, deals: deals.length });
+                        logger.info('Auto-matched lead with Pipedrive', {
+                            phone, person_id: pdPerson.id, deals: deals.length,
+                            strategy: matchResult.strategy,
+                        });
                     }
                 } catch (err) {
                     logger.warn('Pipedrive auto-match failed', { phone, error: err.message });

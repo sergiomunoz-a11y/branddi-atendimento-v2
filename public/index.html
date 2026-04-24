@@ -815,8 +815,17 @@
                     </p>
                     <label class="settings-checkbox-row" style="display:flex;align-items:center;gap:10px;cursor:pointer">
                         <input type="checkbox" id="settings-apollo-enabled" />
-                        <span style="font-size:13px;font-weight:500">Habilitar enriquecimento Apollo</span>
+                        <span style="font-size:13px;font-weight:500">Habilitar enriquecimento Apollo (botões manuais)</span>
                     </label>
+                    <label class="settings-checkbox-row" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:10px">
+                        <input type="checkbox" id="settings-apollo-auto-match" />
+                        <span style="font-size:13px;font-weight:500">Auto-match de leads via Apollo</span>
+                    </label>
+                    <p style="font-size:11px;color:var(--text-muted);margin-top:4px;margin-left:24px">
+                        Quando uma conversa chega sem match de telefone no Pipedrive,
+                        o sistema consulta o Apollo automaticamente e tenta vincular via email/nome.
+                        <strong>Consome 1 crédito Apollo por conversa nova não identificada.</strong>
+                    </p>
                 </div>
 
                 <!-- Nome do atendente global (SÓ Admin) -->

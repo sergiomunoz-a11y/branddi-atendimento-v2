@@ -88,6 +88,67 @@ router.put('/leads/:id', async (req, res) => {
     }
 });
 
+// ─── POST /api/leads/auto-match — Reaplica a cascata de auto-match nos leads
+// existentes sem crm_person_id. Admin only. Útil após um deploy novo de lógica
+// de match ou após ligar o apollo_auto_match.
+router.post('/leads/auto-match', async (req, res) => {
+    if (req.user?.role !== 'Admin') return res.status(403).json({ error: 'Admin only' });
+    try {
+        const { smartMatchPipedrivePerson } = await import('../services/unipile.js').catch(() => ({}));
+        // Usa a função exportada pela unipile; caso não esteja exportada, executamos
+        // a cascata inline via re-imports pra manter compatibilidade
+        const { findPersonByPhone, findPersonByEmail, findPersonByExactName, getDealsForPerson } = await import('../services/pipedrive.js');
+        const { isApolloConfigured, matchPerson } = await import('../services/apollo.js');
+        const { getSettingValue } = await import('../services/supabase.js');
+        const autoMatchEnabled = await getSettingValue('apollo_auto_match', false);
+
+        const { data: leads = [] } = await supabase
+            .from('leads')
+            .select('id, name, phone, crm_person_id, crm_deal_id')
+            .is('crm_person_id', null)
+            .not('phone', 'is', null)
+            .limit(200);
+
+        let matched = 0, tried = 0;
+        for (const l of leads) {
+            tried++;
+            if (!l.phone) continue;
+
+            let person = await findPersonByPhone(l.phone).catch(() => null);
+            let strategy = 'phone_exact';
+
+            if (!person && l.name && !/^\+?\d/.test(l.name) && l.name.length >= 3) {
+                person = await findPersonByExactName(l.name).catch(() => null);
+                if (person) strategy = 'name_exact';
+            }
+            if (!person && autoMatchEnabled && isApolloConfigured()) {
+                try {
+                    const a = await matchPerson({ phone_number: l.phone, name: l.name });
+                    if (a?.person?.email) {
+                        person = await findPersonByEmail(a.person.email).catch(() => null);
+                        if (person) strategy = 'apollo_email';
+                    }
+                    if (!person && a?.person?.name) {
+                        person = await findPersonByExactName(a.person.name).catch(() => null);
+                        if (person) strategy = 'apollo_name';
+                    }
+                } catch { /* pula */ }
+            }
+            if (!person) continue;
+
+            const updates = { crm_person_id: String(person.id) };
+            const deals = await getDealsForPerson(person.id).catch(() => []);
+            if (deals.length > 0) updates.crm_deal_id = String(deals[0].id);
+            await updateLead(l.id, updates);
+            matched++;
+            logger.info('Backfill auto-match', { lead_id: l.id, person_id: person.id, strategy });
+        }
+        res.json({ tried, matched });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── POST /api/leads/:id/link-to-deal — Vincula lead a um deal existente do Pipedrive
 // Útil quando o número do WhatsApp não bate com nenhum phone no Pipedrive mas o SDR
 // sabe qual deal é (ex: errinho de digitação no Pipedrive, números duplicados, etc.)

@@ -2567,6 +2567,8 @@ async function openSettingsModal() {
             // Apollo enrichment (admin only)
             const apolloEl = document.getElementById('settings-apollo-enabled');
             if (apolloEl) apolloEl.checked = !!_settingsData.apollo_enabled;
+            const apolloAutoEl = document.getElementById('settings-apollo-auto-match');
+            if (apolloAutoEl) apolloAutoEl.checked = !!_settingsData.apollo_auto_match;
 
             // Bot 24h
             const awayEnabledEl = document.getElementById('settings-away-enabled');
@@ -2940,6 +2942,7 @@ async function saveSettings() {
                     away_minutes: parseInt(document.getElementById('settings-away-minutes')?.value) || 10,
                     away_message: document.getElementById('settings-away-message')?.value.trim() || '',
                     apollo_enabled: document.getElementById('settings-apollo-enabled')?.checked || false,
+                    apollo_auto_match: document.getElementById('settings-apollo-auto-match')?.checked || false,
                     pipedrive_pipeline_id:   parseInt(pipelineSel.value) || null,
                     pipedrive_pipeline_name: pipelineOpt?.text || '',
                     pipedrive_stage_id:      parseInt(stageSel.value) || null,
