@@ -451,10 +451,45 @@ function startPolling() {
 
 // --- Health Check ---
 async function checkHealth() {
+    const dot = document.getElementById('status-dot');
+    if (!dot) return;
+
+    // Para não-Admin, o status reflete apenas os números atribuídos ao próprio user.
+    // Para Admin, mantém a checagem global (UNIPILE_ACCOUNT_ID do env via /api/health).
+    const isAdmin = currentUser?.role === 'Admin';
+
     try {
+        if (!isAdmin) {
+            const data = await apiFetch('/api/whatsapp/accounts');
+            const accounts = data.accounts || [];
+
+            if (accounts.length === 0) {
+                dot.className = 'status-dot offline';
+                dot.title = 'Nenhum número WhatsApp atribuído a você';
+                return;
+            }
+
+            // "ok"/"connected"/"running"/"ok_for_now" — qualquer um desses vale como online
+            const isConnected = s => /^(ok|connected|running|ok_for_now)$/i.test(s || '');
+            const connected = accounts.filter(a => isConnected(a.status));
+
+            if (connected.length === accounts.length) {
+                dot.className = 'status-dot online';
+                dot.title = connected.length === 1
+                    ? `WhatsApp conectado — ${connected[0].phone_number || connected[0].name}`
+                    : `${connected.length} números WhatsApp conectados`;
+            } else if (connected.length > 0) {
+                dot.className = 'status-dot offline';
+                dot.title = `${accounts.length - connected.length} de ${accounts.length} números desconectados`;
+            } else {
+                dot.className = 'status-dot offline';
+                dot.title = 'WhatsApp desconectado — reconecte';
+            }
+            return;
+        }
+
+        // Admin: health global
         const data = await apiFetch('/api/health');
-        const dot  = document.getElementById('status-dot');
-        if (!dot) return;
         const waOk = data.services?.unipile;
         const rawStatus = data.services?.waStatus || 'unknown';
 
@@ -467,8 +502,8 @@ async function checkHealth() {
             dot.style.animation = 'pulse-warn 1s infinite';
         }
     } catch {
-        const dot = document.getElementById('status-dot');
-        if (dot) { dot.className = 'status-dot offline'; dot.title = 'Servidor offline'; }
+        dot.className = 'status-dot offline';
+        dot.title = 'Servidor offline';
     }
 }
 
