@@ -1206,6 +1206,12 @@ function renderLeadPanel(conv) {
         btnCreateDeal.onclick = () => syncLeadPanelPipedrive(lead.id, conv.id);
     }
 
+    // Botao vincular a deal existente
+    const btnLinkDeal = document.getElementById('btn-link-deal-lp');
+    if (btnLinkDeal) {
+        btnLinkDeal.onclick = () => toggleLinkDealSearch(lead.id);
+    }
+
     // Botao sync Pipedrive
     const btnSync = document.getElementById('btn-sync-pipedrive-lp');
     if (btnSync) {
@@ -1362,6 +1368,76 @@ function renderConvEvents() {
             </div>
         </div>
     `).join('');
+}
+
+// --- Vincular lead a deal existente (search manual) ---
+let _linkDealSearchTimer = null;
+function toggleLinkDealSearch(leadId) {
+    const box = document.getElementById('lp-link-deal-search');
+    if (!box) return;
+    const isOpen = box.style.display !== 'none';
+    box.style.display = isOpen ? 'none' : 'block';
+    if (isOpen) return;
+
+    const input = document.getElementById('lp-link-deal-input');
+    const results = document.getElementById('lp-link-deal-results');
+    if (input) {
+        input.value = '';
+        input.focus();
+        input.oninput = () => {
+            clearTimeout(_linkDealSearchTimer);
+            const q = input.value.trim();
+            if (q.length < 2) {
+                if (results) results.innerHTML = '';
+                return;
+            }
+            _linkDealSearchTimer = setTimeout(() => runLinkDealSearch(q, leadId), 300);
+        };
+    }
+}
+
+async function runLinkDealSearch(q, leadId) {
+    const results = document.getElementById('lp-link-deal-results');
+    if (!results) return;
+    results.innerHTML = '<div class="lp-muted" style="font-size:12px;padding:8px">Buscando...</div>';
+    try {
+        const data = await apiFetch(`/api/pipedrive/search-deals?q=${encodeURIComponent(q)}`);
+        const deals = data?.deals || [];
+        if (deals.length === 0) {
+            results.innerHTML = '<div class="lp-muted" style="font-size:12px;padding:8px">Nenhum deal encontrado</div>';
+            return;
+        }
+        results.innerHTML = deals.map(d => `
+            <div class="link-deal-result" data-deal-id="${d.id}" style="padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s">
+                <div style="font-weight:600;font-size:13px;color:var(--text-primary)">${escHtml(d.title)}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+                    ${escHtml(d.org_name)} · ${escHtml(d.person_name)}
+                    · <span style="color:${d.status === 'won' ? 'var(--green)' : d.status === 'lost' ? 'var(--red)' : 'var(--accent)'}">${escHtml(d.status_label)}</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted)">#${d.id} · ${escHtml(d.stage_name)} · ${escHtml(d.value)}</div>
+            </div>
+        `).join('');
+        results.querySelectorAll('.link-deal-result').forEach(el => {
+            el.addEventListener('click', () => linkLeadToDeal(leadId, el.dataset.dealId));
+        });
+    } catch (err) {
+        results.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px">Erro: ${escHtml(err.message)}</div>`;
+    }
+}
+
+async function linkLeadToDeal(leadId, dealId) {
+    if (!confirm(`Vincular esta conversa ao Deal #${dealId}?`)) return;
+    try {
+        await apiFetch(`/api/leads/${leadId}/link-to-deal`, {
+            method: 'POST',
+            body: JSON.stringify({ deal_id: parseInt(dealId) }),
+        });
+        toast(`✓ Conversa vinculada ao Deal #${dealId}`, 'success');
+        // Recarrega o painel lateral
+        if (currentConversation) renderLeadPanel(currentConversation);
+    } catch (err) {
+        toast(`Falha: ${err.message}`, 'error');
+    }
 }
 
 async function syncLeadPanelPipedrive(leadId, convId) {
@@ -1768,53 +1844,187 @@ async function exportLeadsCSV() {
 
 async function loadDashboard() {
     const days = document.getElementById('dash-period')?.value || 30;
+    const userFilter = document.getElementById('dash-user-filter')?.value || '';
+    const accountFilter = document.getElementById('dash-account-filter')?.value || '';
+    const typeFilter = document.getElementById('dash-type-filter')?.value || '';
+
+    const qs = new URLSearchParams({ days });
+    if (userFilter)    qs.set('user_id', userFilter);
+    if (accountFilter) qs.set('account_id', accountFilter);
+    if (typeFilter)    qs.set('type', typeFilter);
+
     try {
-        const data = await apiFetch(`/api/dashboard?days=${days}`);
+        const data = await apiFetch(`/api/dashboard/analytics?${qs}`);
 
         const setKpi = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? '—'; };
-        setKpi('kpi-total', data.totals?.leads);
-        setKpi('kpi-comercial', data.totals?.comercial);
-        setKpi('kpi-opec', data.totals?.opec);
-        setKpi('kpi-form', data.byOrigin?.form);
-        setKpi('kpi-wa', data.byOrigin?.whatsapp_direct);
 
+        // Atividade
+        setKpi('kpi-sent', fmtNum(data.messages?.sent));
+        setKpi('kpi-received', fmtNum(data.messages?.received));
+        setKpi('kpi-reply-rate', fmtPct(data.messages?.reply_rate));
+        setKpi('kpi-first-resp', fmtDurationMs(data.messages?.avg_first_response_ms));
+
+        // Leads
+        setKpi('kpi-total', fmtNum(data.totals?.leads));
+        setKpi('kpi-comercial', fmtNum(data.totals?.comercial));
+        setKpi('kpi-opec', fmtNum(data.totals?.opec));
+        setKpi('kpi-convs', fmtNum(data.totals?.conversations));
         const total = data.totals?.leads || 1;
         setKpi('kpi-comercial-pct', `${Math.round((data.totals?.comercial||0)/total*100)}%`);
         setKpi('kpi-opec-pct', `${Math.round((data.totals?.opec||0)/total*100)}%`);
 
-        renderCharts(data);
+        // Ações
+        setKpi('kpi-act-bb', fmtNum(data.activities?.wa_bb));
+        setKpi('kpi-act-fr', fmtNum(data.activities?.wa_fr));
+        setKpi('kpi-act-vm', fmtNum(data.activities?.wa_vm));
+        setKpi('kpi-transcripts', fmtNum(data.activities?.transcripts));
+        setKpi('kpi-apollo', fmtNum(data.apollo?.triggered));
+        const apolloSubEl = document.getElementById('kpi-apollo-sub');
+        if (apolloSubEl) {
+            const matched = data.apollo?.matched_with_phone || 0;
+            apolloSubEl.textContent = matched > 0 ? `${matched} com número` : 'enriquecimentos';
+        }
+
+        renderDashCharts(data);
+        renderDashTables(data);
     } catch (err) {
         console.error('Dashboard error:', err);
+        toast(`Dashboard: ${err.message}`, 'error');
     }
 }
 
-function setupDashPeriod() {
-    document.getElementById('dash-period')?.addEventListener('change', loadDashboard);
+function fmtNum(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtPct(r) { return r == null ? '—' : `${Math.round(r * 100)}%`; }
+function fmtDurationMs(ms) {
+    if (ms == null) return '—';
+    const sec = Math.round(ms / 1000);
+    if (sec < 60)      return `${sec}s`;
+    if (sec < 3600)    return `${Math.round(sec/60)}min`;
+    if (sec < 86400)   return `${(sec/3600).toFixed(1)}h`;
+    return `${(sec/86400).toFixed(1)}d`;
 }
 
-function renderCharts(data) {
-    // Chart: Leads por dia
-    const dayLabels = Object.keys(data.leadsByDay || {}).sort().slice(-30);
-    const dayValues = dayLabels.map(d => data.leadsByDay[d] || 0);
+function renderDashTables(data) {
+    const isAdmin = currentUser?.role === 'Admin';
+    const uWrap = document.getElementById('dash-user-table-wrap');
+    const aWrap = document.getElementById('dash-account-table-wrap');
+    if (uWrap) uWrap.style.display = isAdmin ? '' : 'none';
+    if (aWrap) aWrap.style.display = isAdmin ? '' : 'none';
+
+    // Tabela usuários
+    const utbody = document.getElementById('dash-user-tbody');
+    if (utbody) {
+        const rows = data.byUser || [];
+        if (rows.length === 0) {
+            utbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">Sem atividade no período</td></tr>';
+        } else {
+            utbody.innerHTML = rows.map(u => `
+                <tr>
+                    <td><b>${escHtml(u.name)}</b></td>
+                    <td style="text-align:right">${fmtNum(u.sent)}</td>
+                    <td style="text-align:right">${fmtNum(u.received)}</td>
+                    <td style="text-align:right">${fmtPct(u.reply_rate)}</td>
+                    <td style="text-align:right">${fmtNum(u.conversations)}</td>
+                    <td style="text-align:right">${fmtDurationMs(u.avg_first_response_ms)}</td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // Tabela números
+    const atbody = document.getElementById('dash-account-tbody');
+    if (atbody) {
+        const rows = data.byAccount || [];
+        if (rows.length === 0) {
+            atbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px">Sem atividade no período</td></tr>';
+        } else {
+            atbody.innerHTML = rows.map(a => `
+                <tr>
+                    <td><code>${escHtml(a.phone)}</code></td>
+                    <td>${escHtml(a.owner_name || '—')}</td>
+                    <td style="text-align:right">${fmtNum(a.sent)}</td>
+                    <td style="text-align:right">${fmtNum(a.received)}</td>
+                    <td style="text-align:right">${fmtPct(a.reply_rate)}</td>
+                    <td style="text-align:right">${fmtNum(a.conversations)}</td>
+                </tr>
+            `).join('');
+        }
+    }
+}
+
+async function setupDashFilters() {
+    const isAdmin = currentUser?.role === 'Admin';
+    document.querySelectorAll('#panel-dashboard .admin-only').forEach(el => {
+        el.style.display = isAdmin ? '' : 'none';
+    });
+    if (!isAdmin) return;
+
+    // Popula filtros só pro Admin
+    try {
+        const users = (await apiFetch('/api/users')).users || [];
+        const userSel = document.getElementById('dash-user-filter');
+        if (userSel) {
+            userSel.innerHTML = '<option value="">Todos atendentes</option>' +
+                users.filter(u => u.active).map(u =>
+                    `<option value="${u.id}">${escHtml(u.name)} (${u.role})</option>`
+                ).join('');
+        }
+    } catch { /* ignora */ }
+    try {
+        const accounts = (await apiFetch('/api/whatsapp/accounts')).accounts || [];
+        const acctSel = document.getElementById('dash-account-filter');
+        if (acctSel) {
+            acctSel.innerHTML = '<option value="">Todos números</option>' +
+                accounts.map(a =>
+                    `<option value="${a.id}">${escHtml(a.phone_number || a.name || a.id)}</option>`
+                ).join('');
+        }
+    } catch { /* ignora */ }
+}
+
+function setupDashPeriod() {
+    ['dash-period', 'dash-user-filter', 'dash-account-filter', 'dash-type-filter'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', loadDashboard);
+    });
+    setupDashFilters();
+}
+
+function renderDashCharts(data) {
+    // Chart: Envios × Respostas por dia (linha dupla)
+    const byDay = data.byDay || [];
+    const dayLabels = byDay.map(d => d.date);
+    const sentData = byDay.map(d => d.sent);
+    const recvData = byDay.map(d => d.received);
 
     if (chartDay) chartDay.destroy();
-    const ctx1 = document.getElementById('chart-leads-day')?.getContext('2d');
+    const ctx1 = document.getElementById('chart-msgs-day')?.getContext('2d');
     if (ctx1) {
         chartDay = new Chart(ctx1, {
             type: 'line',
             data: {
                 labels: dayLabels,
-                datasets: [{
-                    label: 'Leads',
-                    data: dayValues,
-                    borderColor: '#00E5FF',
-                    backgroundColor: 'rgba(0,229,255,.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: .4,
-                    pointRadius: 3,
-                    pointBackgroundColor: '#00E5FF',
-                }]
+                datasets: [
+                    {
+                        label: 'Enviados',
+                        data: sentData,
+                        borderColor: '#00E5FF',
+                        backgroundColor: 'rgba(0,229,255,.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: .35,
+                        pointRadius: 3,
+                    },
+                    {
+                        label: 'Respostas',
+                        data: recvData,
+                        borderColor: '#34D399',
+                        backgroundColor: 'rgba(52,211,153,.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: .35,
+                        pointRadius: 3,
+                    }
+                ]
             },
             options: chartOpts({ yMin: 0 }),
         });
@@ -2357,6 +2567,8 @@ async function openSettingsModal() {
             // Apollo enrichment (admin only)
             const apolloEl = document.getElementById('settings-apollo-enabled');
             if (apolloEl) apolloEl.checked = !!_settingsData.apollo_enabled;
+            const apolloAutoEl = document.getElementById('settings-apollo-auto-match');
+            if (apolloAutoEl) apolloAutoEl.checked = !!_settingsData.apollo_auto_match;
 
             // Bot 24h
             const awayEnabledEl = document.getElementById('settings-away-enabled');
@@ -2730,6 +2942,7 @@ async function saveSettings() {
                     away_minutes: parseInt(document.getElementById('settings-away-minutes')?.value) || 10,
                     away_message: document.getElementById('settings-away-message')?.value.trim() || '',
                     apollo_enabled: document.getElementById('settings-apollo-enabled')?.checked || false,
+                    apollo_auto_match: document.getElementById('settings-apollo-auto-match')?.checked || false,
                     pipedrive_pipeline_id:   parseInt(pipelineSel.value) || null,
                     pipedrive_pipeline_name: pipelineOpt?.text || '',
                     pipedrive_stage_id:      parseInt(stageSel.value) || null,

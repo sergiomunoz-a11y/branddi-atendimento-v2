@@ -8,7 +8,7 @@ import {
 import { queueConversationSync, syncConversationToPipedrive } from '../services/crm-sync.js';
 import { requireRole } from '../middleware/auth.js';
 import { createWhatsAppActivity } from '../services/pipedrive.js';
-import { getLeadById } from '../services/supabase.js';
+import { getLeadById, logCommercialEvent } from '../services/supabase.js';
 import supabase from '../services/supabase.js';
 import logger from '../services/logger.js';
 
@@ -227,6 +227,14 @@ router.post('/inbox/:id/wa-activity', async (req, res) => {
             deal_id: lead.crm_deal_id,
             tag,
             user_id: req.user?.id || null,
+        });
+
+        // Loga evento pro dashboard analytics
+        await logCommercialEvent(`wa_activity_${tag.toLowerCase()}`, {
+            user_id: req.user?.id || null,
+            conversation_id: conv.id,
+            lead_id: lead.id,
+            metadata: { deal_id: lead.crm_deal_id, tag },
         });
 
         res.json({ success: true, tag, tag_label: WA_TAG_LABELS[tag], activity_id: activity?.id || null });

@@ -396,6 +396,307 @@ export async function getDashboardStats({ days = 30 } = {}) {
     };
 }
 
+// ─── COMMERCIAL EVENTS (dashboard analytics) ─────────────────────────
+
+/**
+ * Loga um evento comercial pro dashboard analítico.
+ * event_type: 'wa_activity_bb' | 'wa_activity_fr' | 'wa_activity_vm'
+ *           | 'transcript_sent' | 'apollo_enrich_triggered' | 'apollo_enrich_matched'
+ *           | 'outbound_started' | etc.
+ * Non-blocking — falhas são silenciadas (não quebra o fluxo principal).
+ */
+export async function logCommercialEvent(event_type, ctx = {}) {
+    try {
+        await supabase.from('commercial_events').insert({
+            event_type,
+            user_id: ctx.user_id || null,
+            conversation_id: ctx.conversation_id || null,
+            lead_id: ctx.lead_id || null,
+            whatsapp_account_id: ctx.whatsapp_account_id || null,
+            metadata: ctx.metadata || null,
+        });
+    } catch { /* silently drop */ }
+}
+
+// ─── ANALYTICS DASHBOARD ─────────────────────────────────────────────
+
+/**
+ * Dashboard analítico com métricas por usuário, por número WhatsApp e agregados.
+ * Role-aware: SDR vê só os próprios dados; Admin vê tudo e pode filtrar.
+ */
+export async function getAnalyticsDashboard({
+    days = 30,
+    user_id = null,         // Admin filtra por SDR; SDR é forçado a ele
+    account_id = null,       // filtro por número WhatsApp
+    type = null,             // 'inbound' | 'prospecting'
+    role = 'Usuario',
+    requester_id = null,
+} = {}) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const effectiveUserId = role === 'Admin' ? user_id : requester_id;
+
+    // Resolve lista de accounts que o filtro implica
+    let accountsFilter = null;
+    if (account_id) {
+        accountsFilter = [account_id];
+    } else if (effectiveUserId) {
+        const { data: u } = await supabase
+            .from('platform_users')
+            .select('permissions')
+            .eq('id', effectiveUserId)
+            .maybeSingle();
+        accountsFilter = u?.permissions?.whatsapp_accounts || [];
+        if (accountsFilter.length === 0 && role !== 'Admin') {
+            // SDR sem números vê zero
+            return emptyAnalytics(days, since);
+        }
+    }
+
+    // Query base de conversas pra resolver conversation_ids no escopo
+    let convQuery = supabase
+        .from('conversations')
+        .select('id, whatsapp_account_id, type, status, created_at, lead_id')
+        .gte('created_at', since);
+    if (type) convQuery = convQuery.eq('type', type);
+    if (accountsFilter && accountsFilter.length > 0) {
+        convQuery = convQuery.in('whatsapp_account_id', accountsFilter);
+    }
+    const { data: convs = [] } = await convQuery;
+    const convIds = convs.map(c => c.id);
+
+    // Se scope é vazio, retorna zeros
+    if (convIds.length === 0) {
+        return emptyAnalytics(days, since);
+    }
+
+    // Mensagens no scope
+    let msgQuery = supabase
+        .from('messages')
+        .select('id, conversation_id, direction, sender_type, sent_by_user_id, sent_by_name, created_at')
+        .gte('created_at', since)
+        .in('conversation_id', convIds)
+        .limit(50000);
+    const { data: msgs = [] } = await msgQuery;
+
+    // Agrega envios / respostas
+    let sent = 0, received = 0;
+    const byDay = {}; // { YYYY-MM-DD: { sent, received } }
+    const byUserAgg = {}; // { user_id: { sent, received, name, first_responses_ms: [], convs: Set } }
+    const byAccountAgg = {}; // { account_id: { sent, received, convs: Set } }
+    const convFirstOutboundBy = {}; // convId → { user_id, timestamp }
+    const convFirstInboundAfter = {}; // convId → earliest inbound timestamp after first outbound
+
+    const convMap = Object.fromEntries(convs.map(c => [c.id, c]));
+
+    // Para detectar "1ª resposta": primeiro outbound humano, depois primeiro inbound após ele
+    const sortedMsgs = [...msgs].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const m of sortedMsgs) {
+        const day = m.created_at.slice(0, 10);
+        byDay[day] ||= { sent: 0, received: 0 };
+        const conv = convMap[m.conversation_id];
+        const accountId = conv?.whatsapp_account_id || null;
+
+        if (m.direction === 'outbound' && m.sender_type === 'human') {
+            sent++;
+            byDay[day].sent++;
+            if (accountId) {
+                byAccountAgg[accountId] ||= { sent: 0, received: 0, convs: new Set() };
+                byAccountAgg[accountId].sent++;
+                byAccountAgg[accountId].convs.add(m.conversation_id);
+            }
+            if (m.sent_by_user_id) {
+                byUserAgg[m.sent_by_user_id] ||= { sent: 0, received: 0, name: m.sent_by_name || null, first_responses_ms: [], convs: new Set() };
+                byUserAgg[m.sent_by_user_id].sent++;
+                byUserAgg[m.sent_by_user_id].convs.add(m.conversation_id);
+            }
+            // Primeiro outbound da conversa define o "dono" pra medir tempo de resposta
+            if (!convFirstOutboundBy[m.conversation_id]) {
+                convFirstOutboundBy[m.conversation_id] = {
+                    user_id: m.sent_by_user_id || null,
+                    ts: m.created_at,
+                };
+            }
+        } else if (m.direction === 'inbound') {
+            received++;
+            byDay[day].received++;
+            if (accountId) {
+                byAccountAgg[accountId] ||= { sent: 0, received: 0, convs: new Set() };
+                byAccountAgg[accountId].received++;
+            }
+            // Atribui recepção ao user que fez o primeiro outbound daquela conversa
+            const firstOut = convFirstOutboundBy[m.conversation_id];
+            if (firstOut?.user_id) {
+                byUserAgg[firstOut.user_id].received++;
+                // 1ª resposta (só a primeira depois do outbound)
+                if (!convFirstInboundAfter[m.conversation_id]) {
+                    convFirstInboundAfter[m.conversation_id] = m.created_at;
+                    const delta = new Date(m.created_at) - new Date(firstOut.ts);
+                    if (delta > 0 && delta < 7 * 86400 * 1000) { // ignora outliers > 7d
+                        byUserAgg[firstOut.user_id].first_responses_ms.push(delta);
+                    }
+                }
+            }
+        }
+    }
+
+    // Tempo médio de 1ª resposta global
+    const allFirstMs = Object.values(byUserAgg).flatMap(u => u.first_responses_ms);
+    const avgFirstResponseMs = allFirstMs.length > 0
+        ? Math.round(allFirstMs.reduce((s, v) => s + v, 0) / allFirstMs.length)
+        : null;
+
+    // Hidrata nomes dos users a partir de platform_users
+    const userIds = Object.keys(byUserAgg);
+    let userMap = {};
+    if (userIds.length > 0) {
+        const { data: users = [] } = await supabase
+            .from('platform_users')
+            .select('id, name, permissions')
+            .in('id', userIds);
+        userMap = Object.fromEntries(users.map(u => [u.id, u]));
+    }
+
+    const byUser = userIds.map(uid => {
+        const agg = byUserAgg[uid];
+        const firstMsAvg = agg.first_responses_ms.length > 0
+            ? Math.round(agg.first_responses_ms.reduce((s, v) => s + v, 0) / agg.first_responses_ms.length)
+            : null;
+        return {
+            user_id: uid,
+            name: userMap[uid]?.name || agg.name || '—',
+            phone_numbers: userMap[uid]?.permissions?.whatsapp_accounts || [],
+            sent: agg.sent,
+            received: agg.received,
+            reply_rate: agg.sent > 0 ? agg.received / agg.sent : null,
+            conversations: agg.convs.size,
+            avg_first_response_ms: firstMsAvg,
+        };
+    }).sort((a, b) => b.sent - a.sent);
+
+    // Hidrata phone dos accounts
+    const accountIds = Object.keys(byAccountAgg);
+    let accountMap = {};
+    if (accountIds.length > 0) {
+        const { data: accounts = [] } = await supabase
+            .from('whatsapp_accounts')
+            .select('unipile_account_id, phone_number, connected_by_user_id, platform_users:connected_by_user_id(name)')
+            .in('unipile_account_id', accountIds);
+        accountMap = Object.fromEntries(accounts.map(a => [a.unipile_account_id, a]));
+    }
+
+    const byAccount = accountIds.map(aid => {
+        const agg = byAccountAgg[aid];
+        return {
+            account_id: aid,
+            phone: accountMap[aid]?.phone_number || '—',
+            owner_name: accountMap[aid]?.platform_users?.name || null,
+            sent: agg.sent,
+            received: agg.received,
+            conversations: agg.convs.size,
+            reply_rate: agg.sent > 0 ? agg.received / agg.sent : null,
+        };
+    }).sort((a, b) => b.sent - a.sent);
+
+    // Eventos comerciais (atividades manuais, Apollo, etc.)
+    let eventsQuery = supabase
+        .from('commercial_events')
+        .select('event_type, user_id, conversation_id, whatsapp_account_id, created_at')
+        .gte('created_at', since)
+        .limit(50000);
+    if (effectiveUserId) eventsQuery = eventsQuery.eq('user_id', effectiveUserId);
+    if (accountsFilter && accountsFilter.length > 0) {
+        eventsQuery = eventsQuery.in('whatsapp_account_id', accountsFilter);
+    }
+    const { data: events = [] } = await eventsQuery;
+    const eventsByType = events.reduce((acc, e) => {
+        acc[e.event_type] = (acc[e.event_type] || 0) + 1;
+        return acc;
+    }, {});
+
+    // Apollo enrichments (da tabela específica)
+    let apolloQuery = supabase
+        .from('apollo_enrichments')
+        .select('status, phone, user_id')
+        .gte('created_at', since);
+    if (effectiveUserId) apolloQuery = apolloQuery.eq('user_id', effectiveUserId);
+    const { data: apolloRows = [] } = await apolloQuery;
+    const apollo = {
+        triggered: apolloRows.length,
+        completed: apolloRows.filter(r => r.status === 'completed').length,
+        matched_with_phone: apolloRows.filter(r => r.status === 'completed' && r.phone).length,
+        not_found: apolloRows.filter(r => r.status === 'not_found').length,
+    };
+
+    // Leads breakdown (para manter KPIs existentes)
+    let leadsQuery = supabase
+        .from('leads')
+        .select('id, origin, classification, created_at')
+        .gte('created_at', since);
+    const { data: leads = [] } = await leadsQuery;
+    const byOrigin = {}, byClassification = {};
+    leads.forEach(l => {
+        byOrigin[l.origin] = (byOrigin[l.origin] || 0) + 1;
+        byClassification[l.classification] = (byClassification[l.classification] || 0) + 1;
+    });
+
+    return {
+        period: { days, since },
+        scope: {
+            role,
+            user_id: effectiveUserId,
+            account_id,
+            type,
+        },
+        totals: {
+            leads: leads.length,
+            conversations: convs.length,
+            comercial: byClassification.comercial || 0,
+            opec: byClassification.opec || 0,
+            unclassified: byClassification.unclassified || 0,
+        },
+        messages: {
+            sent,
+            received,
+            reply_rate: sent > 0 ? received / sent : null,
+            avg_first_response_ms: avgFirstResponseMs,
+        },
+        byDay: Object.entries(byDay)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, v]) => ({ date, sent: v.sent, received: v.received })),
+        byUser: role === 'Admin' ? byUser : byUser.filter(u => u.user_id === effectiveUserId),
+        byAccount,
+        activities: {
+            wa_bb: eventsByType.wa_activity_bb || 0,
+            wa_fr: eventsByType.wa_activity_fr || 0,
+            wa_vm: eventsByType.wa_activity_vm || 0,
+            transcripts: eventsByType.transcript_sent || 0,
+            total_manual:
+                (eventsByType.wa_activity_bb || 0) +
+                (eventsByType.wa_activity_fr || 0) +
+                (eventsByType.wa_activity_vm || 0),
+        },
+        apollo,
+        byOrigin,
+        byClassification,
+    };
+}
+
+function emptyAnalytics(days, since) {
+    return {
+        period: { days, since },
+        scope: { role: 'Usuario', user_id: null, account_id: null, type: null },
+        totals: { leads: 0, conversations: 0, comercial: 0, opec: 0, unclassified: 0 },
+        messages: { sent: 0, received: 0, reply_rate: null, avg_first_response_ms: null },
+        byDay: [],
+        byUser: [],
+        byAccount: [],
+        activities: { wa_bb: 0, wa_fr: 0, wa_vm: 0, transcripts: 0, total_manual: 0 },
+        apollo: { triggered: 0, completed: 0, matched_with_phone: 0, not_found: 0 },
+        byOrigin: {},
+        byClassification: {},
+    };
+}
+
 // ─── SETTINGS (via platform_settings table) ──────────────────────────
 
 export async function getSettingValue(key, defaultValue = null) {

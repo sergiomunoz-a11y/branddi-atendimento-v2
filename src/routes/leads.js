@@ -4,7 +4,8 @@
  */
 import { Router } from 'express';
 import {
-    getLeads, getLeadById, updateLead, getConversationHistory, getMessages
+    getLeads, getLeadById, updateLead, getConversationHistory, getMessages,
+    logCommercialEvent
 } from '../services/supabase.js';
 import { queueLeadSync } from '../services/crm-sync.js';
 import {
@@ -81,6 +82,94 @@ router.put('/leads/:id', async (req, res) => {
         if (err) return res.status(400).json({ error: err });
 
         const lead = await updateLead(req.params.id, updates);
+        res.json({ success: true, lead });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/leads/auto-match — Reaplica a cascata de auto-match nos leads
+// existentes sem crm_person_id. Admin only. Útil após um deploy novo de lógica
+// de match ou após ligar o apollo_auto_match.
+router.post('/leads/auto-match', async (req, res) => {
+    if (req.user?.role !== 'Admin') return res.status(403).json({ error: 'Admin only' });
+    try {
+        const { smartMatchPipedrivePerson } = await import('../services/unipile.js').catch(() => ({}));
+        // Usa a função exportada pela unipile; caso não esteja exportada, executamos
+        // a cascata inline via re-imports pra manter compatibilidade
+        const { findPersonByPhone, findPersonByEmail, findPersonByExactName, getDealsForPerson } = await import('../services/pipedrive.js');
+        const { isApolloConfigured, matchPerson } = await import('../services/apollo.js');
+        const { getSettingValue } = await import('../services/supabase.js');
+        const autoMatchEnabled = await getSettingValue('apollo_auto_match', false);
+
+        const { data: leads = [] } = await supabase
+            .from('leads')
+            .select('id, name, phone, crm_person_id, crm_deal_id')
+            .is('crm_person_id', null)
+            .not('phone', 'is', null)
+            .limit(200);
+
+        let matched = 0, tried = 0;
+        for (const l of leads) {
+            tried++;
+            if (!l.phone) continue;
+
+            let person = await findPersonByPhone(l.phone).catch(() => null);
+            let strategy = 'phone_exact';
+
+            if (!person && l.name && !/^\+?\d/.test(l.name) && l.name.length >= 3) {
+                person = await findPersonByExactName(l.name).catch(() => null);
+                if (person) strategy = 'name_exact';
+            }
+            if (!person && autoMatchEnabled && isApolloConfigured()) {
+                try {
+                    const a = await matchPerson({ phone_number: l.phone, name: l.name });
+                    if (a?.person?.email) {
+                        person = await findPersonByEmail(a.person.email).catch(() => null);
+                        if (person) strategy = 'apollo_email';
+                    }
+                    if (!person && a?.person?.name) {
+                        person = await findPersonByExactName(a.person.name).catch(() => null);
+                        if (person) strategy = 'apollo_name';
+                    }
+                } catch { /* pula */ }
+            }
+            if (!person) continue;
+
+            const updates = { crm_person_id: String(person.id) };
+            const deals = await getDealsForPerson(person.id).catch(() => []);
+            if (deals.length > 0) updates.crm_deal_id = String(deals[0].id);
+            await updateLead(l.id, updates);
+            matched++;
+            logger.info('Backfill auto-match', { lead_id: l.id, person_id: person.id, strategy });
+        }
+        res.json({ tried, matched });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── POST /api/leads/:id/link-to-deal — Vincula lead a um deal existente do Pipedrive
+// Útil quando o número do WhatsApp não bate com nenhum phone no Pipedrive mas o SDR
+// sabe qual deal é (ex: errinho de digitação no Pipedrive, números duplicados, etc.)
+router.post('/leads/:id/link-to-deal', async (req, res) => {
+    try {
+        const { deal_id, person_id } = req.body || {};
+        if (!deal_id) return res.status(400).json({ error: 'deal_id obrigatório' });
+
+        // Valida que o deal existe no Pipedrive antes de salvar
+        try {
+            const d = await pdGet(`/deals/${deal_id}`);
+            if (!d?.data) return res.status(404).json({ error: 'Deal não encontrado no Pipedrive' });
+        } catch (err) {
+            return res.status(404).json({ error: 'Deal não encontrado no Pipedrive' });
+        }
+
+        const updates = { crm_deal_id: String(deal_id) };
+        if (person_id) updates.crm_person_id = String(person_id);
+
+        const lead = await updateLead(req.params.id, updates);
+        logger.info('Lead linked to Pipedrive deal', { lead_id: lead.id, deal_id, person_id });
         res.json({ success: true, lead });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -401,6 +490,14 @@ router.post('/leads/:id/notes', async (req, res) => {
             deal_id: parseInt(targetDealId),
             pinned_to_deal_flag: 0,
         }, apiToken);
+
+        // Loga evento pro dashboard analytics
+        await logCommercialEvent('transcript_sent', {
+            user_id: req.user?.id || null,
+            conversation_id: conversation_id || null,
+            lead_id: lead?.id || null,
+            metadata: { deal_id: targetDealId, msg_count: msgs.length },
+        });
 
         res.json({ ok: true, deal_id: targetDealId, note_id: noteData?.data?.id });
     } catch (err) {
