@@ -31,13 +31,13 @@ async function getUserPipedriveToken(userId) {
 }
 
 /**
- * Busca deal_id e person_id do lead vinculado à conversa
+ * Busca deal_id, person_id e type do lead vinculado à conversa
  */
 async function getConversationDealInfo(conversationId) {
     try {
         const { data: conv } = await supabase
             .from('conversations')
-            .select('lead_id, last_wa_activity_date, last_reply_activity_date')
+            .select('lead_id, type, last_wa_activity_date, last_reply_activity_date')
             .eq('id', conversationId)
             .single();
         if (!conv?.lead_id) return null;
@@ -49,6 +49,7 @@ async function getConversationDealInfo(conversationId) {
             dealId: lead.crm_deal_id,
             personId: lead.crm_person_id || null,
             leadName: lead.name || lead.phone || 'Lead',
+            conversationType: conv.type || null,
             lastWaDate: conv.last_wa_activity_date,
             lastReplyDate: conv.last_reply_activity_date,
         };
@@ -65,6 +66,10 @@ export async function onOutboundMessage(conversationId, userId) {
     try {
         const info = await getConversationDealInfo(conversationId);
         if (!info) return; // sem deal vinculado, ignora
+
+        // Leads de prospecção: atividade WhatsApp é criada MANUALMENTE pelo SDR
+        // via os botões BB/FR/VM no painel direito — não criamos automática.
+        if (info.conversationType === 'prospecting') return;
 
         const today = new Date().toISOString().split('T')[0];
         if (info.lastWaDate === today) return; // já criou hoje

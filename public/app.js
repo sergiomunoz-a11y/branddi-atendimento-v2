@@ -1493,6 +1493,38 @@ function selectDeal(itemEl, lead, conv) {
 function setupActivityButtons(conv, lead) {
     const btnNote = document.getElementById('btn-act-note');
     if (btnNote) btnNote.onclick = () => createDealNote(conv, lead);
+
+    // Botões WA BB/FR/VM — criam atividade concluída no Pipedrive com subject tagueado
+    document.querySelectorAll('.btn-wa-tag').forEach(btn => {
+        btn.onclick = () => createWaTagActivity(conv, btn.dataset.waTag, btn);
+    });
+}
+
+const WA_TAG_LABELS = { BB: 'Brand Bidding', FR: 'Fraude', VM: 'Violação de Marca' };
+
+async function createWaTagActivity(conv, tag, btnEl) {
+    if (!selectedDealId) {
+        toast('Selecione um deal primeiro', 'warning');
+        return;
+    }
+    if (!WA_TAG_LABELS[tag]) return;
+
+    const label = WA_TAG_LABELS[tag];
+    if (!confirm(`Criar atividade WhatsApp ${label} concluída no Deal #${selectedDealId}?`)) return;
+
+    const originalText = btnEl?.textContent;
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳'; }
+    try {
+        const res = await apiFetch(`/api/inbox/${conv.id}/wa-activity`, {
+            method: 'POST',
+            body: JSON.stringify({ tag }),
+        });
+        toast(`Atividade WhatsApp ${res.tag_label || label} criada ✓`, 'success');
+    } catch (err) {
+        toast(`Erro: ${err.message}`, 'error');
+    } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = originalText; }
+    }
 }
 
 async function createDealNote(conv, lead) {
