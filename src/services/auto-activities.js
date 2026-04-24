@@ -37,7 +37,7 @@ async function getConversationDealInfo(conversationId) {
     try {
         const { data: conv } = await supabase
             .from('conversations')
-            .select('lead_id, type, last_wa_activity_date, last_reply_activity_date')
+            .select('lead_id, type, whatsapp_account_id, last_wa_activity_date, last_reply_activity_date')
             .eq('id', conversationId)
             .single();
         if (!conv?.lead_id) return null;
@@ -50,11 +50,32 @@ async function getConversationDealInfo(conversationId) {
             personId: lead.crm_person_id || null,
             leadName: lead.name || lead.phone || 'Lead',
             conversationType: conv.type || null,
+            whatsappAccountId: conv.whatsapp_account_id || null,
             lastWaDate: conv.last_wa_activity_date,
             lastReplyDate: conv.last_reply_activity_date,
         };
     } catch {
         return null;
+    }
+}
+
+/**
+ * Descobre o token Pipedrive do dono da conta WhatsApp por onde veio a conversa.
+ * Assim atividades ficam no nome do SDR certo (não do token global).
+ * Fallback: token global.
+ */
+async function getTokenByWhatsAppAccount(unipileAccountId) {
+    if (!unipileAccountId) return process.env.PIPEDRIVE_API_TOKEN;
+    try {
+        const { data } = await supabase
+            .from('whatsapp_accounts')
+            .select('connected_by_user_id, platform_users:connected_by_user_id(pipedrive_api_token)')
+            .eq('unipile_account_id', unipileAccountId)
+            .maybeSingle();
+        const personalToken = data?.platform_users?.pipedrive_api_token;
+        return personalToken || process.env.PIPEDRIVE_API_TOKEN;
+    } catch {
+        return process.env.PIPEDRIVE_API_TOKEN;
     }
 }
 
@@ -74,7 +95,17 @@ export async function onOutboundMessage(conversationId, userId) {
         const today = new Date().toISOString().split('T')[0];
         if (info.lastWaDate === today) return; // já criou hoje
 
-        const { token, pipedriveUserId } = await getUserPipedriveToken(userId);
+        // Prioridade: (1) token do user logado na UI, (2) token do dono da conta
+        // WhatsApp (SDR enviou do celular direto), (3) token global.
+        let token, pipedriveUserId = null;
+        if (userId) {
+            const r = await getUserPipedriveToken(userId);
+            token = r?.token;
+            pipedriveUserId = r?.pipedriveUserId || null;
+        }
+        if (!token) {
+            token = await getTokenByWhatsAppAccount(info.whatsappAccountId);
+        }
 
         await createWhatsAppActivity({
             dealId: info.dealId,
@@ -115,12 +146,16 @@ export async function onInboundMessage(conversationId) {
         const today = new Date().toISOString().split('T')[0];
         if (info.lastReplyDate === today) return; // já criou hoje
 
+        // Usa o token pessoal do dono da conta WhatsApp (se tiver) pra atividade
+        // ficar no nome do SDR certo, não no do token global.
+        const replyToken = await getTokenByWhatsAppAccount(info.whatsappAccountId);
+
         await createReplyActivity({
             dealId: info.dealId,
             personId: info.personId,
             subject: `Resposta recebida — ${info.leadName}`,
             content: `Lead respondeu via WhatsApp em ${new Date().toLocaleDateString('pt-BR')}`,
-            tokenOverride: process.env.PIPEDRIVE_API_TOKEN, // resposta usa token global
+            tokenOverride: replyToken,
         });
 
         // Marca que já criou atividade de resposta hoje para esta conversa
