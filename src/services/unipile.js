@@ -23,6 +23,33 @@ const BASE    = DSN ? `https://${DSN}/api/v1` : null;
 let _pollingInterval = null;
 let _lastPollTime    = Date.now() - 60_000;
 
+// Cache: unipile_account_id → { user_id, user_name, expires_at }
+const _accountOwnerCache = new Map();
+const ACCOUNT_OWNER_TTL_MS = 5 * 60_000;
+
+async function getAccountOwner(unipileAccountId) {
+    if (!unipileAccountId) return null;
+    const cached = _accountOwnerCache.get(unipileAccountId);
+    if (cached && cached.expires_at > Date.now()) return cached;
+
+    try {
+        const { default: supabase } = await import('./supabase.js');
+        const { data } = await supabase
+            .from('whatsapp_accounts')
+            .select('connected_by_user_id, platform_users:connected_by_user_id(name)')
+            .eq('unipile_account_id', unipileAccountId)
+            .maybeSingle();
+
+        const userId = data?.connected_by_user_id || null;
+        const userName = data?.platform_users?.name || null;
+        const entry = { user_id: userId, user_name: userName, expires_at: Date.now() + ACCOUNT_OWNER_TTL_MS };
+        _accountOwnerCache.set(unipileAccountId, entry);
+        return entry;
+    } catch {
+        return null;
+    }
+}
+
 export function isAvailable() {
     return !!(API_KEY && DSN && ACCT_ID);
 }
@@ -235,15 +262,28 @@ async function processChat(chat) {
             ? allMsgs  // Conversa nova: importa todas as mensagens disponíveis
             : allMsgs.filter(m => new Date(m.timestamp) > new Date(_lastPollTime - 5_000));
 
+        // Descobre quem é o dono da conta WhatsApp (pra gravar nome real em msgs outbound
+        // que chegam pelo polling — ex: SDR enviando do celular, não da UI).
+        // Cache simples em memória do chat.account_id → { user_id, user_name }.
+        let accountOwner = null;
+        const accountId = chat.account_id || conversation.whatsapp_account_id;
+        if (accountId) {
+            accountOwner = await getAccountOwner(accountId);
+        }
+
         for (const rawMsg of newMsgs) {
             // Normalize via provider abstraction
             const msg = whatsapp.normalizeMessage(rawMsg);
 
+            const isOutbound = msg.direction === 'outbound';
+            const outboundName = accountOwner?.user_name || 'Atendente';
             const saved = await saveMessage({
                 conversation_id:    conversation.id,
                 direction:          msg.direction,
-                sender_type:        msg.direction === 'outbound' ? 'human' : 'lead',
-                sender_name:        msg.direction === 'outbound' ? 'Atendente' : conversation.leads?.name || 'Lead',
+                sender_type:        isOutbound ? 'human' : 'lead',
+                sender_name:        isOutbound ? outboundName : (conversation.leads?.name || 'Lead'),
+                sent_by_user_id:    isOutbound ? (accountOwner?.user_id || null) : null,
+                sent_by_name:       isOutbound ? outboundName : null,
                 content:            msg.text,
                 attachments:        msg.attachments,
                 unipile_message_id: msg.id,

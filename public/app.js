@@ -230,13 +230,11 @@ async function confirmDeleteConv() {
 
     try {
         if (mode === 'archive') {
-            const r = await fetch(`/api/inbox/${id}/archive`, { method: 'POST', credentials: 'include' });
-            if (!r.ok) throw new Error((await r.json()).error || 'Erro ao arquivar');
-            alert('✅ Conversa arquivada.');
+            await apiFetch(`/api/inbox/${id}/archive`, { method: 'POST' });
+            toast('✅ Conversa arquivada', 'success');
         } else {
-            const r = await fetch(`/api/inbox/${id}`, { method: 'DELETE', credentials: 'include' });
-            if (!r.ok) throw new Error((await r.json()).error || 'Erro ao excluir');
-            alert('🗑️ Conversa excluída permanentemente.');
+            await apiFetch(`/api/inbox/${id}`, { method: 'DELETE' });
+            toast('🗑️ Conversa excluída permanentemente', 'success');
         }
         closeDeleteConvModal();
         // Remove da lista local e volta ao empty state
@@ -248,7 +246,7 @@ async function confirmDeleteConv() {
         }
         renderConversationList();
     } catch (err) {
-        alert(`❌ Falha: ${err.message}`);
+        toast(`❌ Falha: ${err.message}`, 'error');
     }
 }
 
@@ -256,16 +254,14 @@ async function restoreConversation(conversationId) {
     if (currentUser?.role !== 'Admin') return;
     if (!confirm('Restaurar esta conversa para o inbox ativo?')) return;
     try {
-        const r = await fetch(`/api/inbox/${conversationId}/unarchive`, { method: 'POST', credentials: 'include' });
-        if (!r.ok) throw new Error((await r.json()).error || 'Erro ao restaurar');
-        alert('✅ Conversa restaurada.');
-        // Refresh lista
+        await apiFetch(`/api/inbox/${conversationId}/unarchive`, { method: 'POST' });
+        toast('✅ Conversa restaurada', 'success');
         allConversations = allConversations.filter(c => c.id !== conversationId);
         currentConversation = null;
         renderConversationList();
         if (typeof loadInbox === 'function') loadInbox();
     } catch (err) {
-        alert(`❌ Falha: ${err.message}`);
+        toast(`❌ Falha: ${err.message}`, 'error');
     }
 }
 
