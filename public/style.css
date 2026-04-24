@@ -1372,6 +1372,7 @@ a.nav-btn { text-decoration: none; }
     font-style: italic;
     padding: 5px 9px;
 }
+.deal-contact-apollo-miss { opacity: 0.55; }
 .btn-apollo-enrich {
     background: rgba(139, 92, 246, 0.12);
     border: 1px solid rgba(139, 92, 246, 0.35);

@@ -29,6 +29,72 @@ export function isApolloConfigured() {
  *
  * Returns null if no match found. Throws on config/network errors.
  */
+/**
+ * Fallback search using /mixed_people/search — usado quando /people/match
+ * retorna null. Cobertura maior (search é ICP-based) mas menos preciso.
+ * NÃO consome crédito de enrichment, mas consome search credits separados.
+ */
+export async function searchPerson({ name, first_name, last_name, organization_name, domain } = {}) {
+    if (!API_KEY) return null;
+    const params = new URLSearchParams();
+    params.set('per_page', '5');
+    const fullName = name || [first_name, last_name].filter(Boolean).join(' ');
+    if (fullName) params.set('q_keywords', fullName);
+    if (organization_name) params.set('q_organization_name', organization_name);
+    if (domain) params.set('q_organization_domains', domain);
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+        const res = await fetch(`${BASE}/mixed_people/search?${params}`, {
+            method: 'POST',
+            signal: ctrl.signal,
+            headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const people = data?.people || [];
+        if (people.length === 0) return null;
+        // Tenta achar o match mais próximo por nome
+        const target = (fullName || '').toLowerCase();
+        const best = people.find(p => (p.name || '').toLowerCase() === target) || people[0];
+        return best || null;
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function normalizeApolloPerson(person) {
+    if (!person) return null;
+    return {
+        apollo_id:      person.id,
+        name:           person.name || null,
+        first_name:     person.first_name || null,
+        last_name:      person.last_name || null,
+        title:          person.title || null,
+        headline:       person.headline || null,
+        email:          person.email || null,
+        personal_emails:  Array.isArray(person.personal_emails) ? person.personal_emails : [],
+        linkedin_url:   person.linkedin_url || null,
+        twitter_url:    person.twitter_url || null,
+        github_url:     person.github_url || null,
+        phone_numbers:  Array.isArray(person.phone_numbers)
+            ? person.phone_numbers.map(p => p.sanitized_number || p.raw_number || p).filter(Boolean)
+            : [],
+        organization: person.organization ? {
+            name:         person.organization.name,
+            website_url:  person.organization.website_url,
+            linkedin_url: person.organization.linkedin_url,
+            industry:     person.organization.industry,
+        } : null,
+        city:           person.city || null,
+        state:          person.state || null,
+        country:        person.country || null,
+    };
+}
+
 export async function enrichPerson({
     name, first_name, last_name,
     email, phone_number,
@@ -79,32 +145,10 @@ export async function enrichPerson({
 
     const data = await res.json();
     const person = data?.person || null;
-    if (!person) return null;
-
-    // Normaliza pros campos que a gente usa
-    return {
-        apollo_id:      person.id,
-        name:           person.name || null,
-        first_name:     person.first_name || null,
-        last_name:      person.last_name || null,
-        title:          person.title || null,
-        headline:       person.headline || null,
-        email:          person.email || null,
-        personal_emails:  Array.isArray(person.personal_emails) ? person.personal_emails : [],
-        linkedin_url:   person.linkedin_url || null,
-        twitter_url:    person.twitter_url || null,
-        github_url:     person.github_url || null,
-        phone_numbers:  Array.isArray(person.phone_numbers)
-            ? person.phone_numbers.map(p => p.sanitized_number || p.raw_number).filter(Boolean)
-            : [],
-        organization: person.organization ? {
-            name:         person.organization.name,
-            website_url:  person.organization.website_url,
-            linkedin_url: person.organization.linkedin_url,
-            industry:     person.organization.industry,
-        } : null,
-        city:           person.city || null,
-        state:          person.state || null,
-        country:        person.country || null,
-    };
+    // Se /people/match não achou, tenta /mixed_people/search como fallback
+    if (!person) {
+        const searchResult = await searchPerson({ name, first_name, last_name, organization_name, domain });
+        return normalizeApolloPerson(searchResult);
+    }
+    return normalizeApolloPerson(person);
 }

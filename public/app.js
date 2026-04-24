@@ -2532,8 +2532,24 @@ function populatePermissions(perms) {
     if (prospCb) prospCb.checked = types.includes('prospecting');
 
     // Apollo enrichment permission (per-user)
+    // Admin sempre tem acesso — auto-marca + desabilita o checkbox com hint
     const apolloCb = document.getElementById('uf-perm-apollo');
-    if (apolloCb) apolloCb.checked = !!perms.apollo_enabled;
+    const roleSel = document.getElementById('uf-role');
+    const syncApolloPermByRole = () => {
+        const isAdmin = roleSel?.value === 'Admin';
+        if (!apolloCb) return;
+        if (isAdmin) {
+            apolloCb.checked = true;
+            apolloCb.disabled = true;
+            apolloCb.parentElement?.setAttribute('title', 'Admin sempre tem acesso ao Apollo');
+        } else {
+            apolloCb.disabled = false;
+            apolloCb.checked = !!perms.apollo_enabled;
+            apolloCb.parentElement?.removeAttribute('title');
+        }
+    };
+    syncApolloPermByRole();
+    if (roleSel) roleSel.onchange = syncApolloPermByRole;
 
     // WhatsApp accounts
     const waContainer = document.getElementById('uf-wa-accounts');
@@ -3001,28 +3017,63 @@ function renderDealContactRow(c, apolloEnabled) {
 
 async function apolloEnrichPerson(personId, personName, btnEl) {
     if (!personId) return;
+    const card = btnEl?.closest('.deal-contact-item');
+    const actionsEl = btnEl?.closest('.deal-contact-actions');
     const originalHtml = btnEl?.innerHTML;
     try {
-        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ Enriquecendo...'; }
+        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ Garimpando...'; }
+
         const res = await apiFetch('/api/apollo/enrich-and-save/' + personId, { method: 'POST' });
+
         if (!res.matched) {
-            toast('Apollo: nenhum match encontrado para esse contato.', 'warning');
+            // Apollo não encontrou nada — mostra inline no card e mantém botão como "Tentar novamente"
+            replaceCardActions(actionsEl, '<span class="deal-contact-nophone">Apollo não encontrou</span>');
+            if (card) card.classList.add('deal-contact-apollo-miss');
+            toast('Apollo não encontrou dados para esse contato.', 'warning');
             return;
         }
+
         const updated = res.updated || {};
-        const fields = Object.keys(updated);
-        if (fields.length === 0) {
-            toast('Apollo: dados encontrados, mas os campos já estavam preenchidos no Pipedrive.', 'info');
-        } else {
-            toast(`Apollo: ${fields.join(', ')} atualizado(s) no Pipedrive ✓`, 'success');
+        const phoneAdded = updated.phone?.[0]?.value || null;
+        const titleAdded = updated.job_title || null;
+        const emailAdded = updated.email?.[0]?.value || null;
+
+        if (phoneAdded) {
+            // Transforma o card "sem número" num card clicável com o número descoberto
+            if (card) {
+                card.classList.remove('deal-contact-no-phone');
+                card.classList.add('deal-contact-clickable');
+                card.dataset.phone = phoneAdded;
+                const emptyEl = card.querySelector('.deal-contact-phone-empty');
+                if (emptyEl) {
+                    emptyEl.className = 'deal-contact-phone';
+                    emptyEl.textContent = phoneAdded;
+                }
+                replaceCardActions(actionsEl, '<span class="deal-result-action">Iniciar →</span>');
+            }
+            toast(`Número encontrado: ${phoneAdded} ✓`, 'success');
+            return;
         }
-        // Recarrega a lista pra mostrar o cargo recém descoberto
-        if (_selectedDealForOutbound) openDealContacts(_selectedDealForOutbound);
+
+        // Encontrou match mas sem número — pode ter vindo cargo/email
+        const parts = [];
+        if (titleAdded) parts.push(`cargo: ${titleAdded}`);
+        if (emailAdded) parts.push(`email`);
+        if (parts.length > 0) {
+            toast(`Apollo atualizou ${parts.join(', ')} mas não tem número para este contato.`, 'info');
+        } else {
+            toast('Apollo encontrou, mas não tem número nem novos dados.', 'warning');
+        }
+        replaceCardActions(actionsEl, '<span class="deal-contact-nophone">Sem número no Apollo</span>');
     } catch (err) {
         toast('Erro Apollo: ' + err.message, 'error');
-    } finally {
         if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = originalHtml; }
     }
+}
+
+function replaceCardActions(actionsEl, html) {
+    if (!actionsEl) return;
+    actionsEl.innerHTML = html;
 }
 
 async function openDealContacts(dealId) {
