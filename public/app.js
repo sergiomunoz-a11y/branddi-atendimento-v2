@@ -3001,28 +3001,79 @@ function renderDealContactRow(c, apolloEnabled) {
 
 async function apolloEnrichPerson(personId, personName, btnEl) {
     if (!personId) return;
-    const originalHtml = btnEl?.innerHTML;
+    const card = btnEl?.closest('.deal-contact-item');
+    const actionsEl = btnEl?.closest('.deal-contact-actions');
     try {
-        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ Enriquecendo...'; }
+        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '⏳ Garimpando...'; }
         const res = await apiFetch('/api/apollo/enrich-and-save/' + personId, { method: 'POST' });
+
         if (!res.matched) {
-            toast('Apollo: nenhum match encontrado para esse contato.', 'warning');
+            replaceCardActions(actionsEl, '<span class="deal-contact-nophone">Apollo não encontrou</span>');
+            if (card) card.classList.add('deal-contact-apollo-miss');
+            toast('Apollo não encontrou dados para esse contato.', 'warning');
             return;
         }
-        const updated = res.updated || {};
-        const fields = Object.keys(updated);
-        if (fields.length === 0) {
-            toast('Apollo: dados encontrados, mas os campos já estavam preenchidos no Pipedrive.', 'info');
-        } else {
-            toast(`Apollo: ${fields.join(', ')} atualizado(s) no Pipedrive ✓`, 'success');
+
+        // Se o contato já tinha telefone, Apollo não dispara reveal — só enriquece sync
+        const syncTitle = res.sync_updated?.job_title || null;
+        if (!res.phone_pending) {
+            const parts = [];
+            if (syncTitle) parts.push(`cargo: ${syncTitle}`);
+            if (res.sync_updated?.email) parts.push('email');
+            if (parts.length > 0) {
+                toast(`Apollo atualizou ${parts.join(', ')} ✓`, 'success');
+            } else {
+                toast('Apollo encontrou, mas não havia campos vazios para atualizar.', 'info');
+            }
+            replaceCardActions(actionsEl, '<span class="deal-contact-nophone">Já tinha número</span>');
+            return;
         }
-        // Recarrega a lista pra mostrar o cargo recém descoberto
-        if (_selectedDealForOutbound) openDealContacts(_selectedDealForOutbound);
+
+        // Phone reveal é async — polling no endpoint /enrichment/:ref
+        if (btnEl) btnEl.innerHTML = '⏳ Aguardando Apollo...';
+        const phone = await pollApolloEnrichment(res.ref, 45_000);
+
+        if (phone) {
+            if (card) {
+                card.classList.remove('deal-contact-no-phone');
+                card.classList.add('deal-contact-clickable');
+                card.dataset.phone = phone;
+                const emptyEl = card.querySelector('.deal-contact-phone-empty');
+                if (emptyEl) {
+                    emptyEl.className = 'deal-contact-phone';
+                    emptyEl.textContent = phone;
+                }
+                replaceCardActions(actionsEl, '<span class="deal-result-action">Iniciar →</span>');
+            }
+            toast(`Número encontrado: ${phone} ✓`, 'success');
+        } else {
+            replaceCardActions(actionsEl, '<span class="deal-contact-nophone">Apollo sem número</span>');
+            if (card) card.classList.add('deal-contact-apollo-miss');
+            toast('Apollo não conseguiu revelar o número deste contato.', 'warning');
+        }
     } catch (err) {
         toast('Erro Apollo: ' + err.message, 'error');
-    } finally {
-        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = originalHtml; }
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '🔍 Tentar novamente'; }
     }
+}
+
+async function pollApolloEnrichment(ref, timeoutMs = 45_000) {
+    const start = Date.now();
+    const intervalMs = 3000;
+    while (Date.now() - start < timeoutMs) {
+        await new Promise(r => setTimeout(r, intervalMs));
+        try {
+            const data = await apiFetch('/api/apollo/enrichment/' + ref);
+            if (data.status === 'completed') return data.phone || null;
+            if (data.status === 'not_found' || data.status === 'error') return null;
+        } catch { /* continua tentando */ }
+    }
+    return null; // timeout
+}
+
+function replaceCardActions(actionsEl, html) {
+    if (!actionsEl) return;
+    actionsEl.innerHTML = html;
 }
 
 async function openDealContacts(dealId) {
