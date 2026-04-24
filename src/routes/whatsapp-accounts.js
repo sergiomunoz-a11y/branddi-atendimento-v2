@@ -85,11 +85,16 @@ router.get('/whatsapp/accounts', async (req, res) => {
 
         const enriched = accounts.map(a => {
             const local = localMap[a.id] || {};
+            // Unipile retorna o status detalhado em sources[].status ("OK" quando conectado).
+            // Os campos top-level connection_status/status vêm vazios no endpoint /accounts.
+            const sourceStatus = Array.isArray(a.sources) && a.sources.length > 0
+                ? a.sources[0].status
+                : null;
             return {
                 id: a.id,
                 phone_number: a.connection_params?.im?.phone_number || local.phone_number || null,
                 name: a.name || local.label || null,
-                status: a.connection_status || a.status || local.status || 'unknown',
+                status: a.connection_status || a.status || sourceStatus || local.status || 'unknown',
                 connected_by_user_id: local.connected_by_user_id || null,
                 is_mine: local.connected_by_user_id === user.id,
             };
@@ -166,10 +171,13 @@ router.delete('/whatsapp/accounts/:id', async (req, res) => {
 async function syncAccountToLocal(acc) {
     try {
         const phone = acc.connection_params?.im?.phone_number || null;
+        const sourceStatus = Array.isArray(acc.sources) && acc.sources.length > 0
+            ? acc.sources[0].status
+            : null;
         await supabase.from('whatsapp_accounts').upsert({
             unipile_account_id: acc.id,
             phone_number: phone,
-            status: acc.connection_status || acc.status || 'unknown',
+            status: acc.connection_status || acc.status || sourceStatus || 'unknown',
             updated_at: new Date().toISOString(),
         }, { onConflict: 'unipile_account_id', ignoreDuplicates: false });
     } catch { /* sync nao critico */ }
