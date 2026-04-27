@@ -724,10 +724,26 @@ function updateInboxBadge() {
 }
 
 async function selectConversation(convId) {
-    currentConversation = allConversations.find(c => c.id === convId);
-    if (!currentConversation) return;
+    let conv = allConversations.find(c => c.id === convId);
 
-    _lastMessagesHash = ''; // Reset ao mudar de conversa
+    // Fallback: conversa não está na lista filtrada (ex: criada agora,
+    // outra aba, archived). Busca individualmente.
+    if (!conv) {
+        try {
+            const data = await apiFetch(`/api/inbox/conversation/${convId}`);
+            conv = data?.conversation;
+            if (conv) {
+                // Adiciona à lista pra evitar próximo fetch e manter UX consistente
+                allConversations = [conv, ...allConversations.filter(c => c.id !== conv.id)];
+            }
+        } catch (err) {
+            console.warn('selectConversation: fetch fallback falhou', err.message);
+        }
+    }
+    if (!conv) return;
+
+    currentConversation = conv;
+    _lastMessagesHash = '';
     renderConversationList();
     renderChatArea(currentConversation);
     renderLeadPanel(currentConversation);
@@ -3368,11 +3384,16 @@ async function openDealContacts(dealId) {
     }
 }
 
+let _sendingOutbound = false;
 async function sendOutbound() {
+    // Guard contra double-click — sem isso, 2 conversas idênticas eram criadas
+    // se o user clicasse rápido enquanto a 1ª request estava no ar.
+    if (_sendingOutbound) return;
     if (!_selectedDealForOutbound || !_selectedContactForOutbound) {
         toast('Selecione um contato primeiro', 'warning');
         return;
     }
+    _sendingOutbound = true;
 
     const btn = document.getElementById('btn-send-outbound');
     if (btn) { btn.disabled = true; btn.textContent = 'Criando conversa...'; }
@@ -3402,19 +3423,15 @@ async function sendOutbound() {
 
         await loadInbox();
 
-        // Seleciona a conversa recém criada (com fallback se ainda não estiver na lista)
+        // Seleciona a conversa recém criada — selectConversation tem fallback
+        // que faz fetch individual se a conv não está em allConversations
         if (res.conversation_id) {
-            const inList = allConversations.find(c => c.id === res.conversation_id);
-            if (inList) {
-                selectConversation(res.conversation_id);
-            } else {
-                // Pode acontecer se permissões filtraram fora; segura graciosamente
-                console.warn('Conversa criada não apareceu no inbox filtrado:', res.conversation_id);
-            }
+            await selectConversation(res.conversation_id);
         }
     } catch (err) {
         toast('Erro: ' + err.message, 'error');
     } finally {
+        _sendingOutbound = false;
         if (btn) { btn.disabled = false; btn.textContent = 'Iniciar Conversa WhatsApp'; }
     }
 }

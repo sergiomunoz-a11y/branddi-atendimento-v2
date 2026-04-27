@@ -43,6 +43,50 @@ router.get('/inbox', async (req, res) => {
     }
 });
 
+// ─── GET /api/inbox/conversation/:id — Busca 1 conversa por ID, sem filtros ─
+// Útil quando o front precisa abrir uma conversa que não veio na listagem
+// filtrada (ex: criada agora, ou fora da aba ativa). Respeita permissões:
+// não-Admin só pega conversas dos seus números.
+router.get('/inbox/conversation/:id', async (req, res) => {
+    try {
+        const { data: conv, error } = await supabase
+            .from('conversations')
+            .select(`
+                *,
+                leads(id, name, phone, company_name, classification, origin),
+                messages(id, content, direction, sender_type, sender_name, sent_by_name, created_at, read_at)
+            `)
+            .eq('id', req.params.id)
+            .order('created_at', { referencedTable: 'messages', ascending: false })
+            .maybeSingle();
+
+        if (error) return res.status(500).json({ error: error.message });
+        if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+
+        // Permissão: não-Admin só vê os próprios números (a não ser que esteja
+        // assigned ou seja conversa nova sem account_id ainda — caso outbound).
+        if (req.user?.role !== 'Admin') {
+            const allowed = req.user?.permissions?.whatsapp_accounts || [];
+            const allowsNullAccount = !conv.whatsapp_account_id; // conversa nova
+            if (!allowsNullAccount && !allowed.includes(conv.whatsapp_account_id)) {
+                return res.status(403).json({ error: 'Sem permissão para esta conversa' });
+            }
+        }
+
+        const msgs = conv.messages || [];
+        res.json({
+            conversation: {
+                ...conv,
+                last_message: msgs[0] || null,
+                unread_count: msgs.filter(m => m.direction === 'inbound' && !m.read_at).length,
+                messages: undefined,
+            },
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ─── GET /api/inbox/stats — Contadores do inbox ───────────────────────
 router.get('/inbox/stats', async (req, res) => {
     try {
