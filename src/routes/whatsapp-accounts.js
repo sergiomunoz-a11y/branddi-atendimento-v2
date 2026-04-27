@@ -70,7 +70,7 @@ router.get('/whatsapp/accounts', async (req, res) => {
         // Busca registros locais para enriquecer com connected_by info
         const { data: localAccounts } = await supabase
             .from('whatsapp_accounts')
-            .select('unipile_account_id, phone_number, label, connected_by_user_id, status');
+            .select('unipile_account_id, phone_number, label, display_label, connected_by_user_id, status, platform_users:connected_by_user_id(name)');
 
         const localMap = {};
         for (const la of (localAccounts || [])) {
@@ -90,10 +90,19 @@ router.get('/whatsapp/accounts', async (req, res) => {
             const sourceStatus = Array.isArray(a.sources) && a.sources.length > 0
                 ? a.sources[0].status
                 : null;
+            // display_name na ordem de preferência:
+            //   display_label (SDR IA: "Ricardo", "Gio")
+            //   nome do dono (connected_by_user_id) — primeiro nome
+            //   nada → cai no número como fallback no front
+            const ownerFullName = local.platform_users?.name || null;
+            const ownerFirstName = ownerFullName ? ownerFullName.split(/\s+/)[0] : null;
+            const displayName = local.display_label || ownerFirstName || null;
+
             return {
                 id: a.id,
                 phone_number: a.connection_params?.im?.phone_number || local.phone_number || null,
                 name: a.name || local.label || null,
+                display_name: displayName,
                 status: a.connection_status || a.status || sourceStatus || local.status || 'unknown',
                 connected_by_user_id: local.connected_by_user_id || null,
                 is_mine: local.connected_by_user_id === user.id,
