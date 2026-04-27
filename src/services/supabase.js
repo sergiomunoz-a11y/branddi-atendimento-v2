@@ -130,6 +130,29 @@ export async function updateConversation(id, updates) {
  * getInbox — v2: busca apenas a última mensagem por conversa (fix N+1)
  * Usa subquery limitada em vez de trazer todas as mensagens.
  */
+// Cache de account_id → owner full name (60s)
+let _accountOwnersCache = { data: null, ts: 0 };
+async function getAccountOwnersMap() {
+    const TTL = 60_000;
+    if (_accountOwnersCache.data && (Date.now() - _accountOwnersCache.ts) < TTL) {
+        return _accountOwnersCache.data;
+    }
+    try {
+        const { data: rows } = await supabase
+            .from('whatsapp_accounts')
+            .select('unipile_account_id, connected_by_user_id, platform_users:connected_by_user_id(name)');
+        const map = {};
+        (rows || []).forEach(r => {
+            const name = r.platform_users?.name;
+            if (r.unipile_account_id && name) map[r.unipile_account_id] = name;
+        });
+        _accountOwnersCache = { data: map, ts: Date.now() };
+        return map;
+    } catch {
+        return _accountOwnersCache.data || {};
+    }
+}
+
 export async function getInbox({
     status, assigned_to, limit = 50,
     type, role, user_id, allowed_types,
@@ -201,10 +224,18 @@ export async function getInbox({
     const { data, error } = await query;
     if (error) throw error;
 
+    // Hidrata cada conv com o primeiro nome do dono do número WhatsApp
+    // (whatsapp_accounts.connected_by_user_id → platform_users.name).
+    // Usa cache curto pra evitar query a cada chamada de getInbox.
+    const accountOwners = await getAccountOwnersMap();
+
     return (data || []).map(conv => {
         const msgs = conv.messages || [];
+        const fullName = accountOwners[conv.whatsapp_account_id] || null;
+        const firstName = fullName ? fullName.split(/\s+/)[0] : null;
         return {
             ...conv,
+            account_owner_name: firstName,
             last_message: msgs[0] || null,
             unread_count: msgs.filter(m =>
                 m.direction === 'inbound' && !m.read_at
