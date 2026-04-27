@@ -192,9 +192,11 @@ app.listen(PORT, () => {
     startCrmSyncWorker();
     // Auto-reply workers (away/nudge/followup) desativados — nenhuma mensagem automática por inatividade.
     // startChatbotWorkers();
-    // Retry inteligente de entrega: msgs outbound não entregues em 5min ganham
-    // 1 tentativa na variante BR alternativa do número (com/sem 9).
-    startDeliveryRetryWorker();
+    // Delivery retry worker DESATIVADO — bug de loop: o retry cria chat novo no
+    // Unipile, polling importa a msg de volta como nova outbound, worker pega
+    // de novo → enviou várias cópias da mesma msg pra leads (caso Jéssica/inFlux).
+    // Manter desativado até reescrever pra reusar chat existente em vez de criar novo.
+    // startDeliveryRetryWorker();
 });
 
 export default app;
