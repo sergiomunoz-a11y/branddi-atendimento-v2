@@ -174,21 +174,63 @@ export async function sendMessage(chatId, text, attachmentBuffer, attachmentName
 }
 
 /**
+ * Gera variantes BR de um número (com/sem 9, com/sem DDI 55).
+ * Crítico em DDDs do Sul e antigos onde o WhatsApp do destinatário NÃO
+ * tem o 9 inicial — mandar com 9 cai num chat fantasma que nunca entrega.
+ */
+function brPhoneVariants(phone) {
+    const digits = String(phone).replace(/\D/g, '');
+    const local = digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
+    const out = new Set();
+    if (local.length >= 10) out.add(`55${local}`);                                      // como veio
+    if (local.length === 10) out.add(`55${local.slice(0,2)}9${local.slice(2)}`);        // adiciona 9
+    if (local.length === 11 && local[2] === '9') out.add(`55${local.slice(0,2)}${local.slice(3)}`); // remove 9
+    return [...out];
+}
+
+/**
+ * Procura um chat já existente nessa conta cujo attendee bata com qualquer
+ * uma das variantes do telefone, com mensagens RECENTES delivered=1
+ * (= número confirmadamente válido na rede WhatsApp).
+ * Retorna { chat_id } ou null.
+ */
+async function findVerifiedChatByPhone(accountId, phoneVariants) {
+    if (!accountId || !phoneVariants?.length) return null;
+    try {
+        const list = await req(`/chats?account_id=${accountId}&limit=100`);
+        for (const chat of (list.items || [])) {
+            const att = await req(`/chats/${chat.id}/attendees`).catch(() => null);
+            const attendeePhones = (att?.items || [])
+                .map(a => String(a.specifics?.phone_number || a.phone_number || a.public_identifier || '').replace(/\D/g, ''))
+                .filter(Boolean);
+            const matches = attendeePhones.some(p => phoneVariants.some(v => p.endsWith(v) || v.endsWith(p)));
+            if (!matches) continue;
+
+            // Confirma que o chat já teve msg outbound entregue (= número válido)
+            const msgs = await req(`/chats/${chat.id}/messages?limit=10`).catch(() => null);
+            const hasDelivered = (msgs?.items || []).some(m => m.is_sender && m.delivered === 1);
+            if (hasDelivered) return { chat_id: chat.id };
+        }
+    } catch { /* fallback silencioso */ }
+    return null;
+}
+
+/**
  * Inicia nova conversa pelo Unipile.
- * accountId: ID da conta WhatsApp a usar (do número que vai enviar). Se omitido,
- *            cai pro env UNIPILE_ACCOUNT_ID e por último pra primeira conta WA
- *            ATIVA listada no Unipile (resiliente a env stale).
+ * - Resolve a conta (com fallback se env stale)
+ * - Procura chat já validado pra alguma variante do telefone (com/sem 9 BR);
+ *   se achar, MANDA NELE em vez de criar duplicata fantasma
+ * - Senão, cria chat novo com o phone como veio
  */
 export async function startNewChat(phoneNumber, text, accountId = null) {
     let acct = accountId || await getWhatsAppAccountId();
 
-    // Validação: se a conta nem existe mais no Unipile, busca uma ativa
     if (acct) {
         try {
             const r = await fetch(`${BASE}/accounts/${acct}`, {
                 headers: { 'X-API-KEY': API_KEY }, signal: AbortSignal.timeout(4000),
             });
-            if (!r.ok) acct = null; // conta não existe mais → cai no fallback
+            if (!r.ok) acct = null;
         } catch { acct = null; }
     }
     if (!acct) {
@@ -203,6 +245,17 @@ export async function startNewChat(phoneNumber, text, accountId = null) {
     }
     if (!acct) throw new Error('Nenhuma conta WhatsApp conectada no Unipile');
 
+    // Tenta achar um chat já confirmado (delivered=1 em msg anterior) pra alguma
+    // variante do número. Evita o caso clássico do "5192924470 sem 9" sendo
+    // mandado como "51992924470 com 9" → chat fantasma nunca entrega.
+    const variants = brPhoneVariants(phoneNumber);
+    const existing = await findVerifiedChatByPhone(acct, variants);
+    if (existing?.chat_id) {
+        await sendMessage(existing.chat_id, text);
+        return { id: existing.chat_id, chat_id: existing.chat_id, reused_existing: true };
+    }
+
+    // Sem chat verificado existente — cria novo com o phone original
     const fd = new FormData();
     fd.append('account_id', acct);
     fd.append('text',       text);
