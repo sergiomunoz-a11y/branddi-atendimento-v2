@@ -41,7 +41,7 @@ router.post('/messages/:conversationId/send', async (req, res) => {
             // Busca conversa e lead para pegar o telefone
             const { data: conv } = await supabase
                 .from('conversations')
-                .select('id, lead_id, whatsapp_chat_id')
+                .select('id, lead_id, whatsapp_chat_id, whatsapp_account_id')
                 .eq('id', req.params.conversationId)
                 .single();
 
@@ -51,10 +51,23 @@ router.post('/messages/:conversationId/send', async (req, res) => {
                 const lead = await getLeadById(conv.lead_id);
                 if (lead?.phone) {
                     const whatsappPhone = lead.phone.startsWith('55') ? lead.phone : `55${lead.phone}`;
-                    const chatResult = await startNewChat(whatsappPhone, text);
+
+                    // Resolve qual conta WhatsApp usar pra enviar:
+                    // 1. conversation.whatsapp_account_id (se já vinculada)
+                    // 2. primeiro número permitido ao user logado
+                    // 3. fallback no startNewChat (env / primeira ativa)
+                    let sendAccountId = conv.whatsapp_account_id || null;
+                    if (!sendAccountId && req.user?.permissions?.whatsapp_accounts?.length > 0) {
+                        sendAccountId = req.user.permissions.whatsapp_accounts[0];
+                    }
+
+                    const chatResult = await startNewChat(whatsappPhone, text, sendAccountId);
                     chatId = chatResult?.id || chatResult?.chat_id;
                     if (chatId) {
-                        await updateConversation(req.params.conversationId, { whatsapp_chat_id: chatId });
+                        // Marca a conta usada na conversa pra próximas msgs
+                        const updates = { whatsapp_chat_id: chatId };
+                        if (sendAccountId) updates.whatsapp_account_id = sendAccountId;
+                        await updateConversation(req.params.conversationId, updates);
                     }
 
                     // Primeira msg já foi enviada pelo startNewChat, salvar e retornar

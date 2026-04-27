@@ -173,11 +173,38 @@ export async function sendMessage(chatId, text, attachmentBuffer, attachmentName
     return req(`/chats/${chatId}/messages`, { method: 'POST', body: fd });
 }
 
-export async function startNewChat(phoneNumber, text) {
-    const accountId = await getWhatsAppAccountId();
-    if (!accountId) throw new Error('Nenhuma conta WhatsApp conectada no Unipile');
+/**
+ * Inicia nova conversa pelo Unipile.
+ * accountId: ID da conta WhatsApp a usar (do número que vai enviar). Se omitido,
+ *            cai pro env UNIPILE_ACCOUNT_ID e por último pra primeira conta WA
+ *            ATIVA listada no Unipile (resiliente a env stale).
+ */
+export async function startNewChat(phoneNumber, text, accountId = null) {
+    let acct = accountId || await getWhatsAppAccountId();
+
+    // Validação: se a conta nem existe mais no Unipile, busca uma ativa
+    if (acct) {
+        try {
+            const r = await fetch(`${BASE}/accounts/${acct}`, {
+                headers: { 'X-API-KEY': API_KEY }, signal: AbortSignal.timeout(4000),
+            });
+            if (!r.ok) acct = null; // conta não existe mais → cai no fallback
+        } catch { acct = null; }
+    }
+    if (!acct) {
+        const all = await listAccounts().catch(() => null);
+        const items = all?.items || [];
+        const wa = items.find(a =>
+            (a.type || a.provider || '').toUpperCase() === 'WHATSAPP'
+            && Array.isArray(a.sources) && a.sources[0]?.status
+            && /^(ok|connected|running|ok_for_now)$/i.test(a.sources[0].status)
+        );
+        acct = wa?.id || null;
+    }
+    if (!acct) throw new Error('Nenhuma conta WhatsApp conectada no Unipile');
+
     const fd = new FormData();
-    fd.append('account_id', accountId);
+    fd.append('account_id', acct);
     fd.append('text',       text);
     fd.append('attendees_ids', phoneNumber);
     return req('/chats', { method: 'POST', body: fd });
