@@ -1013,12 +1013,25 @@ function renderMessage(msg) {
     // Conteúdo de texto com links clicáveis
     const textContent = msg.content ? linkify(escHtml(msg.content)) : (atts.length ? '' : '(mídia)');
 
+    // Status de entrega — só faz sentido em msgs outbound (humano ou bot)
+    let deliveryHtml = '';
+    if (isOut && !isNote) {
+        const seen = !!msg.seen;
+        const delivered = !!msg.delivered;
+        let icon, label, klass;
+        if (seen)            { icon = '✓✓'; label = 'Lido';      klass = 'msg-status seen'; }
+        else if (delivered)  { icon = '✓✓'; label = 'Entregue';  klass = 'msg-status delivered'; }
+        else                 { icon = '✓';  label = 'Enviado';   klass = 'msg-status sent'; }
+        deliveryHtml = `<span class="${klass}" title="${label}">${icon}</span>`;
+    }
+
     return `<div class="msg-bubble ${cls}">
         ${attachmentsHtml}
         ${textContent ? `<div class="msg-text">${textContent}</div>` : ''}
         <div class="msg-meta">
             ${sender ? `<span class="msg-sender${isBot ? ' bot-label' : ''}">${escHtml(sender)}</span>` : ''}
             <span class="msg-time">${time}</span>
+            ${deliveryHtml}
         </div>
     </div>`;
 }

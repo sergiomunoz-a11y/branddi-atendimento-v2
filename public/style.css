@@ -1761,3 +1761,16 @@ a.nav-btn { text-decoration: none; }
 .conv-item.lead-replied.active {
     border-left-color: var(--accent);
 }
+
+/* Status de entrega de mensagens outbound (✓ enviado / ✓✓ entregue / ✓✓ azul lido) */
+.msg-status {
+    margin-left: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    vertical-align: middle;
+    cursor: default;
+}
+.msg-status.sent      { color: rgba(255,255,255,0.35); }   /* ✓ cinza claro */
+.msg-status.delivered { color: rgba(255,255,255,0.55); }   /* ✓✓ cinza forte */
+.msg-status.seen      { color: #38bdf8; }                  /* ✓✓ azul (lido) */

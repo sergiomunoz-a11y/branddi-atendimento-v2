@@ -95,6 +95,10 @@ class UnipileProvider extends WhatsAppProvider {
             senderName:  raw.sender?.name || null,
             timestamp:   raw.timestamp || raw.created_at,
             attachments,
+            // Status de entrega (significativo apenas pra outbound):
+            // delivered=1 → ✓✓ cinza | seen=1 → ✓✓ azul (lido)
+            delivered:   raw.delivered === 1 || raw.delivered === true,
+            seen:        raw.seen === 1 || raw.seen === true,
         };
     }
 

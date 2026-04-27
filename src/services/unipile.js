@@ -398,10 +398,23 @@ async function processChat(chat) {
                 attachments:        msg.attachments,
                 unipile_message_id: msg.id,
                 created_at:         msg.timestamp,
+                delivered:          !!msg.delivered,
+                seen:               !!msg.seen,
             });
 
-            // v2: Se saveMessage retorna null, mensagem é duplicata — pula processamento
-            if (!saved) continue;
+            // v2: Se saveMessage retorna null, mensagem é DUPLICATA. Mas se a msg
+            // já existia, podemos atualizar delivered/seen (que mudam ao longo
+            // do tempo conforme o destinatário recebe/lê).
+            if (!saved) {
+                if (isOutbound) {
+                    const { default: sb } = await import('./supabase.js');
+                    await sb
+                        .from('messages')
+                        .update({ delivered: !!msg.delivered, seen: !!msg.seen })
+                        .eq('unipile_message_id', msg.id);
+                }
+                continue;
+            }
 
             // v2: Reset bot_away_sent SOMENTE quando um humano respondeu (outbound humano)
             // Isso evita o loop: inbound → reset → away → inbound → reset → away...
