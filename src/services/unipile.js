@@ -296,11 +296,29 @@ async function processChat(chat) {
                 : isLLMBotAvailable() ? 'qualifying'
                 : (lead.origin === 'form' ? 'welcome' : 'human');
 
+            // Tipo da conversa vem do default da conta WhatsApp.
+            // Ex: número da Harylanne (5511999802791) é prospecting; outros 'inbound'.
+            // Permite "pessoal SDR" vs "site oficial" coexistirem na mesma plataforma.
+            let convType = 'inbound';
+            if (chat.account_id) {
+                try {
+                    const { data: acc } = await import('./supabase.js').then(m =>
+                        m.default
+                            .from('whatsapp_accounts')
+                            .select('default_conversation_type')
+                            .eq('unipile_account_id', chat.account_id)
+                            .maybeSingle()
+                    );
+                    if (acc?.default_conversation_type) convType = acc.default_conversation_type;
+                } catch { /* fallback inbound */ }
+            }
+
             conversation = await createConversation({
                 lead_id:             lead.id,
                 whatsapp_chat_id:    chat.id,
                 whatsapp_account_id: chat.account_id || null,
                 channel:             'whatsapp_direct',
+                type:                convType,
                 status:              weStarted ? 'in_progress' : 'waiting',
                 chatbot_stage:       botStage,
                 last_message_at:     new Date().toISOString(),
