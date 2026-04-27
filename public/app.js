@@ -703,8 +703,13 @@ function renderConversationList() {
         const isActive = currentConversation?.id === conv.id;
         const hasUnread = (conv.unread_count || 0) > 0;
 
-        const ownerBadge = conv.account_owner_name
-            ? `<span class="conv-owner-badge" title="Atendente responsável">${escHtml(conv.account_owner_name)}</span>`
+        // 1+ etiquetas de atendente: lista nomes (Harylanne, Ricardo, Gio,
+        // ou múltiplos como Kaiky+Stephanie quando o número é compartilhado)
+        const ownerNames = Array.isArray(conv.account_owner_names) && conv.account_owner_names.length > 0
+            ? conv.account_owner_names
+            : (conv.account_owner_name ? [conv.account_owner_name] : []);
+        const ownerBadge = ownerNames.length > 0
+            ? ownerNames.map(n => `<span class="conv-owner-badge" title="Atendente responsável">${escHtml(n)}</span>`).join('')
             : '';
 
         return `<div class="conv-item${isActive ? ' active' : ''}${hasUnread ? ' unread' : ''}" data-id="${conv.id}" data-action="select-conversation">

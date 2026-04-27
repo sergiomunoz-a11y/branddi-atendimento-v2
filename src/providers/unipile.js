@@ -69,15 +69,32 @@ class UnipileProvider extends WhatsAppProvider {
     }
 
     normalizeMessage(raw) {
+        let text = raw.text || '';
+        let attachments = raw.attachments || [];
+
+        // Unipile devolve "cannot display this type" pra vCard / sticker / áudio /
+        // vídeo / localização — mas o conteúdo nativo do WhatsApp vem em raw.original.
+        // Aqui parseamos e substituímos por uma label útil + metadata pro front
+        // renderizar adequadamente.
+        if (text.includes('Unipile cannot display this type')) {
+            const enriched = enrichUnsupportedMessage(raw.original);
+            if (enriched) {
+                text = enriched.text;
+                if (enriched.meta) {
+                    attachments = [{ type: 'native_meta', kind: enriched.kind, meta: enriched.meta }];
+                }
+            }
+        }
+
         return {
             id:          raw.id,
             chatId:      raw.chat_id,
-            text:        raw.text || '',
+            text,
             direction:   raw.is_sender ? 'outbound' : 'inbound',
             senderPhone: raw.sender?.phone_number || null,
             senderName:  raw.sender?.name || null,
             timestamp:   raw.timestamp || raw.created_at,
-            attachments: raw.attachments || [],
+            attachments,
         };
     }
 
@@ -100,6 +117,71 @@ class UnipileProvider extends WhatsAppProvider {
             providerId: raw.provider_id || raw.id || null,
         };
     }
+}
+
+/**
+ * Quando Unipile diz "cannot display this type", o JSON nativo do WhatsApp
+ * vem em raw.original. Detecta o tipo e devolve uma label útil em pt-BR.
+ */
+function enrichUnsupportedMessage(originalStr) {
+    if (!originalStr) return null;
+    let parsed;
+    try { parsed = typeof originalStr === 'string' ? JSON.parse(originalStr) : originalStr; }
+    catch { return null; }
+    const m = parsed?.message;
+    if (!m) return null;
+
+    if (m.contactMessage) {
+        const name  = m.contactMessage.displayName || 'Contato';
+        const vcard = m.contactMessage.vcard || '';
+        const phoneMatch = vcard.match(/TEL[^:]*:([^\s\n]+)/i);
+        const phone = phoneMatch ? phoneMatch[1].replace(/^[^+\d]+/, '') : null;
+        return {
+            text: `📇 Contato compartilhado: ${name}${phone ? ` — ${phone}` : ''}`,
+            kind: 'contact',
+            meta: { name, phone, vcard },
+        };
+    }
+    if (m.contactsArrayMessage) {
+        const list = m.contactsArrayMessage.contacts || [];
+        return {
+            text: `📇 ${list.length} contatos compartilhados`,
+            kind: 'contacts_array',
+            meta: { count: list.length },
+        };
+    }
+    if (m.stickerMessage) {
+        return { text: '🌟 Figurinha (visualizar no WhatsApp)', kind: 'sticker', meta: {} };
+    }
+    if (m.audioMessage) {
+        const seconds = m.audioMessage.seconds || null;
+        return {
+            text: `🎵 Áudio${seconds ? ` (${seconds}s)` : ''} — visualizar no WhatsApp`,
+            kind: 'audio',
+            meta: { seconds },
+        };
+    }
+    if (m.videoMessage) {
+        return { text: '🎬 Vídeo (visualizar no WhatsApp)', kind: 'video', meta: {} };
+    }
+    if (m.locationMessage) {
+        const lat = m.locationMessage.degreesLatitude;
+        const lng = m.locationMessage.degreesLongitude;
+        const url = (lat && lng) ? `https://maps.google.com/?q=${lat},${lng}` : null;
+        return {
+            text: `📍 Localização compartilhada${url ? ` — ${url}` : ''}`,
+            kind: 'location',
+            meta: { lat, lng, url },
+        };
+    }
+    if (m.liveLocationMessage) {
+        return { text: '📍 Localização em tempo real', kind: 'live_location', meta: {} };
+    }
+    if (m.pollCreationMessage) {
+        const name = m.pollCreationMessage.name || 'Enquete';
+        return { text: `📊 Enquete: ${name}`, kind: 'poll', meta: { name } };
+    }
+    return { text: '📎 Mensagem em formato não suportado', kind: 'unknown', meta: {} };
 }
 
 // Singleton
