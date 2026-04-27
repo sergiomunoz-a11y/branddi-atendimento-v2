@@ -632,8 +632,9 @@
                 <input type="text" id="script-title" placeholder="Ex: Apresentacao Brand Bidding" required />
             </div>
             <div class="form-group">
-                <label>Mensagem <span class="label-hint">Use {{nome}}, {{empresa}}, {{data}}</span></label>
-                <textarea id="script-content" rows="6" placeholder="Digite a mensagem..." required></textarea>
+                <label>Mensagem <span class="label-hint">{{nome}} · {{empresa}} · {{first_name}} · {{org_name}}</span></label>
+                <textarea id="script-content" rows="6" placeholder="Ex: Olá {{nome}}, sobre a {{empresa}} - identifiquei alguns problemas..." required></textarea>
+                <span style="font-size:11px;color:var(--text-muted)">As variáveis são preenchidas automaticamente quando você aplica o script numa conversa.</span>
             </div>
             <div class="form-group">
                 <label class="toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
