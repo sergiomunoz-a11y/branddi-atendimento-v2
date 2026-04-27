@@ -95,6 +95,16 @@ export async function onOutboundMessage(conversationId, userId) {
         const today = new Date().toISOString().split('T')[0];
         if (info.lastWaDate === today) return; // já criou hoje
 
+        // ATOMIC CLAIM — pra hoje. Reivindica se NULL ou se data anterior.
+        const { data: claimed, error: claimErr } = await supabase
+            .from('conversations')
+            .update({ last_wa_activity_date: today })
+            .eq('id', conversationId)
+            .or(`last_wa_activity_date.is.null,last_wa_activity_date.lt.${today}`)
+            .select('id')
+            .maybeSingle();
+        if (claimErr || !claimed) return;
+
         // Prioridade: (1) token do user logado na UI, (2) token do dono da conta
         // WhatsApp (SDR enviou do celular direto), (3) token global.
         let token, pipedriveUserId = null;
@@ -107,20 +117,23 @@ export async function onOutboundMessage(conversationId, userId) {
             token = await getTokenByWhatsAppAccount(info.whatsappAccountId);
         }
 
-        await createWhatsAppActivity({
-            dealId: info.dealId,
-            personId: info.personId,
-            subject: `WhatsApp — ${info.leadName}`,
-            transcript: '', // atividade simples, sem transcrição
-            done: true,
-            tokenOverride: token,
-        });
-
-        // Marca que já criou atividade WhatsApp hoje para esta conversa
-        await supabase
-            .from('conversations')
-            .update({ last_wa_activity_date: today })
-            .eq('id', conversationId);
+        try {
+            await createWhatsAppActivity({
+                dealId: info.dealId,
+                personId: info.personId,
+                subject: `WhatsApp — ${info.leadName}`,
+                transcript: '',
+                done: true,
+                tokenOverride: token,
+            });
+        } catch (err) {
+            // Falha → reverte claim para tentar amanhã
+            await supabase
+                .from('conversations')
+                .update({ last_wa_activity_date: info.lastWaDate || null })
+                .eq('id', conversationId);
+            throw err;
+        }
 
         logger.info('Auto WhatsApp activity created', {
             conversation_id: conversationId,
@@ -136,33 +149,57 @@ export async function onOutboundMessage(conversationId, userId) {
 
 /**
  * Chamado quando uma mensagem INBOUND é recebida (lead → humano)
- * Cria atividade tipo "resposta" no Pipedrive (1x por conversa/dia)
+ * Cria atividade tipo "resposta" no Pipedrive — APENAS UMA POR CONVERSA, ever.
+ *
+ * "1 conversa = 1 sinal de que o lead respondeu". Não importa quantas mensagens
+ * inbound vierem ao longo dos dias — a primeira já gerou a atividade.
+ *
+ * Usa atomic compare-and-swap (UPDATE WHERE IS NULL + RETURNING) para evitar
+ * race condition: várias mensagens inbound chegando ao mesmo tempo competem
+ * pelo claim, mas só uma vence e cria a atividade.
  */
 export async function onInboundMessage(conversationId) {
     try {
         const info = await getConversationDealInfo(conversationId);
         if (!info) return; // sem deal vinculado, ignora
 
+        // Já criada nessa conversa em algum momento → não duplica
+        if (info.lastReplyDate) return;
+
+        // ATOMIC CLAIM — só uma chamada concorrente consegue marcar a coluna
         const today = new Date().toISOString().split('T')[0];
-        if (info.lastReplyDate === today) return; // já criou hoje
-
-        // Usa o token pessoal do dono da conta WhatsApp (se tiver) pra atividade
-        // ficar no nome do SDR certo, não no do token global.
-        const replyToken = await getTokenByWhatsAppAccount(info.whatsappAccountId);
-
-        await createReplyActivity({
-            dealId: info.dealId,
-            personId: info.personId,
-            subject: `Resposta recebida — ${info.leadName}`,
-            content: `Lead respondeu via WhatsApp em ${new Date().toLocaleDateString('pt-BR')}`,
-            tokenOverride: replyToken,
-        });
-
-        // Marca que já criou atividade de resposta hoje para esta conversa
-        await supabase
+        const { data: claimed, error: claimErr } = await supabase
             .from('conversations')
             .update({ last_reply_activity_date: today })
-            .eq('id', conversationId);
+            .eq('id', conversationId)
+            .is('last_reply_activity_date', null)
+            .select('id')
+            .maybeSingle();
+
+        if (claimErr || !claimed) {
+            // Outro processo já reivindicou — não cria
+            return;
+        }
+
+        // Token pessoal do dono da conta WhatsApp (atividade no nome certo)
+        const replyToken = await getTokenByWhatsAppAccount(info.whatsappAccountId);
+
+        try {
+            await createReplyActivity({
+                dealId: info.dealId,
+                personId: info.personId,
+                subject: `Resposta recebida — ${info.leadName}`,
+                content: `Lead respondeu via WhatsApp em ${new Date().toLocaleDateString('pt-BR')}`,
+                tokenOverride: replyToken,
+            });
+        } catch (err) {
+            // Falha na criação → libera o claim pra próxima tentativa
+            await supabase
+                .from('conversations')
+                .update({ last_reply_activity_date: null })
+                .eq('id', conversationId);
+            throw err;
+        }
 
         logger.info('Auto Reply activity created', {
             conversation_id: conversationId,
