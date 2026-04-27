@@ -130,7 +130,14 @@ export async function updateConversation(id, updates) {
  * getInbox — v2: busca apenas a última mensagem por conversa (fix N+1)
  * Usa subquery limitada em vez de trazer todas as mensagens.
  */
-// Cache de account_id → owner full name (60s)
+// Cache de metadata por account WhatsApp (60s).
+// Estrutura: {
+//   [unipile_account_id]: {
+//     display_label: 'Ricardo' | null,         // sobrescreve nome real (SDR IA)
+//     primary_owner_first_name: 'Harylanne' | null,  // do connected_by_user_id
+//     permitted_users: [{ id, first_name }],   // users com o account em permissions
+//   }
+// }
 let _accountOwnersCache = { data: null, ts: 0 };
 async function getAccountOwnersMap() {
     const TTL = 60_000;
@@ -138,19 +145,77 @@ async function getAccountOwnersMap() {
         return _accountOwnersCache.data;
     }
     try {
-        const { data: rows } = await supabase
-            .from('whatsapp_accounts')
-            .select('unipile_account_id, connected_by_user_id, platform_users:connected_by_user_id(name)');
+        const [accountsRes, usersRes] = await Promise.all([
+            supabase
+                .from('whatsapp_accounts')
+                .select('unipile_account_id, display_label, connected_by_user_id, platform_users:connected_by_user_id(name)'),
+            supabase
+                .from('platform_users')
+                .select('id, name, permissions')
+                .eq('active', true),
+        ]);
+        const accounts = accountsRes.data || [];
+        const users = usersRes.data || [];
+
+        // Index reverso: account_id → users que têm permissão de operar
+        const permittedByAccount = {};
+        users.forEach(u => {
+            const list = u.permissions?.whatsapp_accounts || [];
+            list.forEach(accId => {
+                permittedByAccount[accId] ||= [];
+                permittedByAccount[accId].push({
+                    id: u.id,
+                    first_name: (u.name || '').split(/\s+/)[0] || u.name,
+                });
+            });
+        });
+
         const map = {};
-        (rows || []).forEach(r => {
-            const name = r.platform_users?.name;
-            if (r.unipile_account_id && name) map[r.unipile_account_id] = name;
+        accounts.forEach(a => {
+            if (!a.unipile_account_id) return;
+            const ownerName = a.platform_users?.name;
+            map[a.unipile_account_id] = {
+                display_label: a.display_label || null,
+                primary_owner_first_name: ownerName ? ownerName.split(/\s+/)[0] : null,
+                permitted_users: permittedByAccount[a.unipile_account_id] || [],
+            };
         });
         _accountOwnersCache = { data: map, ts: Date.now() };
         return map;
     } catch {
         return _accountOwnersCache.data || {};
     }
+}
+
+/**
+ * Decide quais nomes mostrar como etiqueta numa conversa.
+ * Cascata:
+ *   1. display_label da conta (SDR IA com label fixo: "Ricardo", "Gio")
+ *   2. primary_owner_first_name (connected_by_user_id setado: 1 dono real)
+ *   3. Se múltiplos users têm permissão e há mensagens humanas outbound
+ *      com sent_by_user_id, retorna os nomes desses (interação real)
+ *   4. Se 1 user permitido, retorna só ele
+ *   5. Vazio
+ */
+function resolveOwnerNames(conv, accountMeta) {
+    if (!accountMeta) return [];
+    if (accountMeta.display_label) return [accountMeta.display_label];
+    if (accountMeta.primary_owner_first_name) return [accountMeta.primary_owner_first_name];
+
+    const permitted = accountMeta.permitted_users || [];
+    if (permitted.length === 0) return [];
+    if (permitted.length === 1) return [permitted[0].first_name];
+
+    // Múltiplos donos compartilhando o número → mostra quem realmente
+    // interagiu com este deal/conversa, baseado nas mensagens outbound humanas.
+    const interactedIds = new Set();
+    (conv.messages || []).forEach(m => {
+        if (m.direction === 'outbound' && m.sender_type === 'human' && m.sent_by_user_id) {
+            interactedIds.add(m.sent_by_user_id);
+        }
+    });
+    const filtered = permitted.filter(u => interactedIds.has(u.id));
+    return filtered.length > 0 ? filtered.map(u => u.first_name) : [];
 }
 
 export async function getInbox({
@@ -231,11 +296,12 @@ export async function getInbox({
 
     return (data || []).map(conv => {
         const msgs = conv.messages || [];
-        const fullName = accountOwners[conv.whatsapp_account_id] || null;
-        const firstName = fullName ? fullName.split(/\s+/)[0] : null;
+        const accountMeta = accountOwners[conv.whatsapp_account_id] || null;
+        const ownerNames = resolveOwnerNames(conv, accountMeta);
         return {
             ...conv,
-            account_owner_name: firstName,
+            account_owner_name: ownerNames[0] || null,        // compat com versão anterior
+            account_owner_names: ownerNames,                  // novo: 1+ tags
             last_message: msgs[0] || null,
             unread_count: msgs.filter(m =>
                 m.direction === 'inbound' && !m.read_at

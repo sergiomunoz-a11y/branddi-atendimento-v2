@@ -75,16 +75,43 @@ router.get('/inbox/conversation/:id', async (req, res) => {
 
         const msgs = conv.messages || [];
 
-        // Hidrata account_owner_name (primeiro nome do dono do número)
-        let accountOwnerName = null;
+        // Hidrata etiquetas de dono(s) — mesma cascata do getInbox:
+        // display_label > connected_by_user_id > permitted users que interagiram
+        let ownerNames = [];
         if (conv.whatsapp_account_id) {
-            const { data: acc } = await supabase
-                .from('whatsapp_accounts')
-                .select('platform_users:connected_by_user_id(name)')
-                .eq('unipile_account_id', conv.whatsapp_account_id)
-                .maybeSingle();
-            const fullName = acc?.platform_users?.name;
-            if (fullName) accountOwnerName = fullName.split(/\s+/)[0];
+            const [{ data: acc }, { data: users = [] }] = await Promise.all([
+                supabase
+                    .from('whatsapp_accounts')
+                    .select('display_label, platform_users:connected_by_user_id(name)')
+                    .eq('unipile_account_id', conv.whatsapp_account_id)
+                    .maybeSingle(),
+                supabase
+                    .from('platform_users')
+                    .select('id, name, permissions')
+                    .eq('active', true),
+            ]);
+            if (acc?.display_label) {
+                ownerNames = [acc.display_label];
+            } else if (acc?.platform_users?.name) {
+                ownerNames = [acc.platform_users.name.split(/\s+/)[0]];
+            } else {
+                const permitted = users
+                    .filter(u => (u.permissions?.whatsapp_accounts || []).includes(conv.whatsapp_account_id))
+                    .map(u => ({ id: u.id, first_name: (u.name || '').split(/\s+/)[0] || u.name }));
+                if (permitted.length === 1) {
+                    ownerNames = [permitted[0].first_name];
+                } else if (permitted.length > 1) {
+                    const interactedIds = new Set();
+                    msgs.forEach(m => {
+                        if (m.direction === 'outbound' && m.sender_type === 'human' && m.sent_by_user_id) {
+                            interactedIds.add(m.sent_by_user_id);
+                        }
+                    });
+                    ownerNames = permitted
+                        .filter(u => interactedIds.has(u.id))
+                        .map(u => u.first_name);
+                }
+            }
         }
 
         res.json({
@@ -92,7 +119,8 @@ router.get('/inbox/conversation/:id', async (req, res) => {
                 ...conv,
                 last_message: msgs[0] || null,
                 unread_count: msgs.filter(m => m.direction === 'inbound' && !m.read_at).length,
-                account_owner_name: accountOwnerName,
+                account_owner_name: ownerNames[0] || null,
+                account_owner_names: ownerNames,
                 messages: undefined,
             },
         });
