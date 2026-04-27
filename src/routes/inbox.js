@@ -17,7 +17,7 @@ const router = Router();
 // ─── GET /api/inbox — Lista conversas filtradas por role/usuário ──────
 router.get('/inbox', async (req, res) => {
     try {
-        const { status, type, limit = 50, filter_user_id, archived } = req.query;
+        const { status, type, limit = 50, filter_user_id, filter_account_id, archived } = req.query;
         const user   = req.user || {};
         const role   = user.role;
         const userId = user.id;
@@ -35,6 +35,7 @@ router.get('/inbox', async (req, res) => {
             allowed_types: role === 'Admin' ? null : (permissions.conversation_types || []),
             allowed_accounts: role === 'Admin' ? null : (permissions.whatsapp_accounts || []),
             filter_user_id: role === 'Admin' ? (filter_user_id || null) : null,
+            filter_account_id: filter_account_id || null,
             archived: showArchived,
         });
         res.json({ conversations, total: conversations.length });
