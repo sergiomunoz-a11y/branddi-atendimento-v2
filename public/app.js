@@ -588,10 +588,12 @@ function setupInboxFilters() {
             const accounts = (data.accounts || []).filter(a =>
                 isAdmin || myAccounts.includes(a.id)
             );
-            accountFilterEl.innerHTML = '<option value="">Todos os números</option>' +
+            accountFilterEl.innerHTML = '<option value="">Todos os atendentes</option>' +
                 accounts.map(a => {
-                    const phone = a.phone_number || a.name || a.id;
-                    return `<option value="${a.id}">${escHtml(phone)}</option>`;
+                    // Prefere o nome do atendente (Harylanne, Ricardo, Gio).
+                    // Se não tem, mostra o número como fallback.
+                    const label = a.display_name || a.phone_number || a.name || a.id;
+                    return `<option value="${a.id}">${escHtml(label)}</option>`;
                 }).join('');
         }).catch(() => {});
     }
@@ -735,17 +737,25 @@ function renderConversationList() {
         const time = conv.last_message ? relativeTime(conv.last_message.created_at) : relativeTime(conv.created_at);
         const isActive = currentConversation?.id === conv.id;
         const hasUnread = (conv.unread_count || 0) > 0;
+        // Última mensagem foi do lead → highlight visual diferente do "nova msg"
+        const lastFromLead = conv.last_message?.direction === 'inbound';
 
-        // 1+ etiquetas de atendente: lista nomes (Harylanne, Ricardo, Gio,
-        // ou múltiplos como Kaiky+Stephanie quando o número é compartilhado)
+        // 1+ etiquetas de atendente, cada uma com cor própria derivada do nome
         const ownerNames = Array.isArray(conv.account_owner_names) && conv.account_owner_names.length > 0
             ? conv.account_owner_names
             : (conv.account_owner_name ? [conv.account_owner_name] : []);
         const ownerBadge = ownerNames.length > 0
-            ? ownerNames.map(n => `<span class="conv-owner-badge" title="Atendente responsável">${escHtml(n)}</span>`).join('')
+            ? ownerNames.map(n =>
+                `<span class="conv-owner-badge" data-color="${ownerColorClass(n)}" title="Atendente responsável">${escHtml(n)}</span>`
+              ).join('')
             : '';
 
-        return `<div class="conv-item${isActive ? ' active' : ''}${hasUnread ? ' unread' : ''}" data-id="${conv.id}" data-action="select-conversation">
+        const klass = ['conv-item'];
+        if (isActive)            klass.push('active');
+        if (hasUnread)           klass.push('unread');
+        if (lastFromLead)        klass.push('lead-replied');
+
+        return `<div class="${klass.join(' ')}" data-id="${conv.id}" data-action="select-conversation">
             <div class="conv-item-top">
                 <span class="conv-name">${escHtml(name)}${ownerBadge}</span>
                 <span class="conv-time">${time}</span>
@@ -754,6 +764,15 @@ function renderConversationList() {
             ${hasUnread ? `<div class="conv-tags"><span class="tag tag-unread">${conv.unread_count} nova${conv.unread_count > 1 ? 's' : ''}</span></div>` : ''}
         </div>`;
     }).join('');
+}
+
+// Atribui uma das 6 paletas pré-definidas com base no hash do nome —
+// determinístico entre sessões: "Harylanne" sempre cai na mesma cor.
+function ownerColorClass(name) {
+    if (!name) return 'c0';
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+    return 'c' + (Math.abs(h) % 6);
 }
 
 function updateInboxBadge() {

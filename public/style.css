@@ -1732,18 +1732,32 @@ a.nav-btn { text-decoration: none; }
     .login-card { padding: 32px 24px; margin: 16px; }
 }
 
-/* Etiqueta de "atendente responsável" no card de conversa do inbox */
+/* Etiqueta de "atendente responsável" — paleta de 6 cores estável por nome */
 .conv-owner-badge {
     display: inline-block;
     margin-left: 6px;
     padding: 1px 6px;
     border-radius: 4px;
-    background: rgba(0, 229, 255, 0.12);
-    border: 1px solid rgba(0, 229, 255, 0.25);
-    color: #7dd3fc;
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.2px;
     vertical-align: middle;
     white-space: nowrap;
+    border: 1px solid;
+}
+.conv-owner-badge[data-color="c0"] { background: rgba(0,229,255,0.12);   border-color: rgba(0,229,255,0.30);   color: #7dd3fc; }
+.conv-owner-badge[data-color="c1"] { background: rgba(167,139,250,0.14); border-color: rgba(167,139,250,0.32); color: #c4b5fd; }
+.conv-owner-badge[data-color="c2"] { background: rgba(52,211,153,0.14);  border-color: rgba(52,211,153,0.32);  color: #6ee7b7; }
+.conv-owner-badge[data-color="c3"] { background: rgba(251,191,36,0.14);  border-color: rgba(251,191,36,0.32);  color: #fcd34d; }
+.conv-owner-badge[data-color="c4"] { background: rgba(244,114,182,0.14); border-color: rgba(244,114,182,0.32); color: #f9a8d4; }
+.conv-owner-badge[data-color="c5"] { background: rgba(96,165,250,0.14);  border-color: rgba(96,165,250,0.32);  color: #93c5fd; }
+
+/* Conversa cuja última mensagem é do LEAD — destaque (precisa atender) */
+.conv-item.lead-replied {
+    border-left: 3px solid #34d399;
+    background: linear-gradient(90deg, rgba(52,211,153,0.06), transparent 60%);
+}
+.conv-item.lead-replied .conv-name { color: #ecfdf5; }
+.conv-item.lead-replied.active {
+    border-left-color: var(--accent);
 }
