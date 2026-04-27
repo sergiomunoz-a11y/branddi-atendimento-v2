@@ -74,11 +74,25 @@ router.get('/inbox/conversation/:id', async (req, res) => {
         }
 
         const msgs = conv.messages || [];
+
+        // Hidrata account_owner_name (primeiro nome do dono do número)
+        let accountOwnerName = null;
+        if (conv.whatsapp_account_id) {
+            const { data: acc } = await supabase
+                .from('whatsapp_accounts')
+                .select('platform_users:connected_by_user_id(name)')
+                .eq('unipile_account_id', conv.whatsapp_account_id)
+                .maybeSingle();
+            const fullName = acc?.platform_users?.name;
+            if (fullName) accountOwnerName = fullName.split(/\s+/)[0];
+        }
+
         res.json({
             conversation: {
                 ...conv,
                 last_message: msgs[0] || null,
                 unread_count: msgs.filter(m => m.direction === 'inbound' && !m.read_at).length,
+                account_owner_name: accountOwnerName,
                 messages: undefined,
             },
         });

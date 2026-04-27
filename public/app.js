@@ -703,9 +703,13 @@ function renderConversationList() {
         const isActive = currentConversation?.id === conv.id;
         const hasUnread = (conv.unread_count || 0) > 0;
 
+        const ownerBadge = conv.account_owner_name
+            ? `<span class="conv-owner-badge" title="Atendente responsável">${escHtml(conv.account_owner_name)}</span>`
+            : '';
+
         return `<div class="conv-item${isActive ? ' active' : ''}${hasUnread ? ' unread' : ''}" data-id="${conv.id}" data-action="select-conversation">
             <div class="conv-item-top">
-                <span class="conv-name">${escHtml(name)}</span>
+                <span class="conv-name">${escHtml(name)}${ownerBadge}</span>
                 <span class="conv-time">${time}</span>
             </div>
             <div class="conv-preview">${escHtml(preview)}</div>

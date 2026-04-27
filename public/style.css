@@ -1731,3 +1731,19 @@ a.nav-btn { text-decoration: none; }
     .kpi-grid { grid-template-columns: 1fr; }
     .login-card { padding: 32px 24px; margin: 16px; }
 }
+
+/* Etiqueta de "atendente responsável" no card de conversa do inbox */
+.conv-owner-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0, 229, 255, 0.12);
+    border: 1px solid rgba(0, 229, 255, 0.25);
+    color: #7dd3fc;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
