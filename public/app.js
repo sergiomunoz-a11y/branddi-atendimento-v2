@@ -322,7 +322,12 @@ document.addEventListener('click', (e) => {
 });
 function updateFilterDot() {
     const dot = document.getElementById('filter-active-dot');
-    const hasFilter = currentTypeFilter !== 'all' || currentFilter !== 'all';
+    const accountVal = document.getElementById('inbox-account-filter')?.value || '';
+    const userVal    = document.getElementById('inbox-user-filter')?.value || '';
+    const hasFilter = currentTypeFilter !== 'all'
+        || currentFilter !== 'all'
+        || !!accountVal
+        || !!userVal;
     if (dot) dot.classList.toggle('show', hasFilter);
 }
 
@@ -565,6 +570,32 @@ function setupInboxFilters() {
         }).catch(() => {});
     }
 
+    // Filtro por número WhatsApp — aparece quando user tem 2+ números atribuídos.
+    // Admin SEMPRE pode (vê todos os números do sistema). Non-Admin só vê os seus.
+    const accountFilterEl = document.getElementById('inbox-account-filter');
+    const accountGroup = document.getElementById('filter-account-group');
+    const isAdmin = currentUser?.role === 'Admin';
+    const myAccounts = currentUser?.permissions?.whatsapp_accounts || [];
+    const showAccountFilter = isAdmin || myAccounts.length >= 2;
+
+    if (accountFilterEl && showAccountFilter) {
+        if (accountGroup) accountGroup.style.display = '';
+        accountFilterEl.addEventListener('change', () => {
+            updateFilterDot();
+            loadInbox();
+        });
+        apiFetch('/api/whatsapp/accounts').then(data => {
+            const accounts = (data.accounts || []).filter(a =>
+                isAdmin || myAccounts.includes(a.id)
+            );
+            accountFilterEl.innerHTML = '<option value="">Todos os números</option>' +
+                accounts.map(a => {
+                    const phone = a.phone_number || a.name || a.id;
+                    return `<option value="${a.id}">${escHtml(phone)}</option>`;
+                }).join('');
+        }).catch(() => {});
+    }
+
     // Abas de tipo (Inbound / Prospeccao)
     document.querySelectorAll('.type-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -637,8 +668,10 @@ async function loadInbox(silent = false) {
         const typeParam = currentTypeFilter !== 'all' ? `&type=${currentTypeFilter}` : '';
         const userFilter = document.getElementById('inbox-user-filter')?.value;
         const userParam = userFilter ? `&filter_user_id=${userFilter}` : '';
+        const accountFilter = document.getElementById('inbox-account-filter')?.value;
+        const accountParam = accountFilter ? `&filter_account_id=${accountFilter}` : '';
         const archivedParam = currentFilter === 'archived' ? '&archived=true' : '';
-        const data = await apiFetch(`/api/inbox?limit=100${typeParam}${userParam}${archivedParam}`);
+        const data = await apiFetch(`/api/inbox?limit=100${typeParam}${userParam}${accountParam}${archivedParam}`);
         const newConversations = data.conversations || [];
 
         // Hash rápido para detectar mudanças e evitar re-render desnecessário (flicker)

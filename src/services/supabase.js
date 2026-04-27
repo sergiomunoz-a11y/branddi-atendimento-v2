@@ -223,6 +223,7 @@ export async function getInbox({
     type, role, user_id, allowed_types,
     allowed_accounts, // números WhatsApp que o não-Admin pode ver (permissions.whatsapp_accounts)
     filter_user_id, // Admin pode filtrar por usuário específico
+    filter_account_id, // qualquer user pode filtrar por 1 número dos seus permitidos
     archived = false, // true = lista só arquivadas (Admin)
 } = {}) {
     let query = supabase
@@ -279,7 +280,17 @@ export async function getInbox({
             // Sem números atribuídos = inbox vazio (regra de negócio explícita)
             return [];
         }
-        query = query.in('whatsapp_account_id', accounts);
+        // Se o user pediu filtro por número específico, valida que pertence aos permitidos
+        if (filter_account_id && accounts.includes(filter_account_id)) {
+            query = query.eq('whatsapp_account_id', filter_account_id);
+        } else {
+            query = query.in('whatsapp_account_id', accounts);
+        }
+    }
+
+    // Admin filtrando por número (independente de user_id)
+    if (role === 'Admin' && filter_account_id) {
+        query = query.eq('whatsapp_account_id', filter_account_id);
     }
 
     if (assigned_to) {
