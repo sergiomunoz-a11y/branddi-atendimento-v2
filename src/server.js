@@ -33,6 +33,7 @@ import simulateRouter              from './routes/simulate.js';
 import { startPolling }            from './services/unipile.js';
 import { startCrmSyncWorker }      from './services/crm-sync.js';
 import { startChatbotWorkers }     from './services/chatbot-workers.js';
+import { startDeliveryRetryWorker } from './services/delivery-retry-worker.js';
 import { getPipedriveCircuitStatus } from './services/pipedrive.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -191,6 +192,9 @@ app.listen(PORT, () => {
     startCrmSyncWorker();
     // Auto-reply workers (away/nudge/followup) desativados — nenhuma mensagem automática por inatividade.
     // startChatbotWorkers();
+    // Retry inteligente de entrega: msgs outbound não entregues em 5min ganham
+    // 1 tentativa na variante BR alternativa do número (com/sem 9).
+    startDeliveryRetryWorker();
 });
 
 export default app;
