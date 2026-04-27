@@ -1128,28 +1128,53 @@ document.addEventListener('click', e => {
     }
 });
 
-async function applyScript(scriptId) {
+/**
+ * Insere o script no textarea de mensagem (sem enviar).
+ * Substitui variáveis: {{first_name}}, {{nome}}, {{org_name}}, {{empresa}}
+ * — case-insensitive, espaços tolerados.
+ * Usuário revisa o conteúdo e clica enviar manualmente.
+ */
+function applyScript(scriptId) {
     const script = allScripts.find(s => s.id === scriptId);
     if (!script || !currentConversation) return;
 
     document.getElementById('scripts-menu')?.classList.remove('open');
 
-    const chatId = currentConversation.whatsapp_chat_id;
-    if (!chatId) { toast('Conversa sem chat ID', 'error'); return; }
+    // Garante que está na aba "Mensagem" (não em "Anotações internas")
+    if (typeof switchChatTab === 'function') switchChatTab('message');
 
-    try {
-        await apiFetch(`/api/messages/${currentConversation.id}/script`, {
-            method: 'POST',
-            body: JSON.stringify({
-                script_content: script.content,
-                chatId,
-                lead_id: currentConversation.lead_id,
-            }),
-        });
-        toast(`Script enviado: ${script.title}`, 'success');
-        await loadMessages(currentConversation.id);
-    } catch (err) {
-        toast(`Erro: ${err.message}`, 'error');
+    // Substitui variáveis a partir do lead da conversa
+    const lead = currentConversation.leads || {};
+    const fullName  = (lead.name || '').trim();
+    const firstName = fullName.split(/\s+/)[0] || '';
+    const orgName   = (lead.company_name || '').trim();
+
+    const filled = (script.content || '')
+        .replace(/\{\{\s*first[_\s-]?name\s*\}\}/gi, firstName)
+        .replace(/\{\{\s*nome\s*\}\}/gi,            firstName)
+        .replace(/\{\{\s*primeiro[_\s-]?nome\s*\}\}/gi, firstName)
+        .replace(/\{\{\s*org[_\s-]?name\s*\}\}/gi,  orgName)
+        .replace(/\{\{\s*organizacao\s*\}\}/gi,     orgName)
+        .replace(/\{\{\s*empresa\s*\}\}/gi,         orgName);
+
+    const input = document.getElementById('chat-input');
+    if (!input) return;
+    input.value = filled;
+    input.focus();
+    // Move cursor pro fim
+    input.setSelectionRange(filled.length, filled.length);
+    // Re-dispara auto-resize do textarea (existe em outras partes do código)
+    if (typeof autoResizeTextarea === 'function') autoResizeTextarea(input);
+    input.dispatchEvent(new Event('input'));
+
+    // Avisa caso alguma variável não tenha sido substituída
+    const missing = [];
+    if (filled.match(/\{\{\s*first[_\s-]?name\s*\}\}|\{\{\s*nome\s*\}\}|\{\{\s*primeiro[_\s-]?nome\s*\}\}/gi)) missing.push('primeiro nome');
+    if (filled.match(/\{\{\s*org[_\s-]?name\s*\}\}|\{\{\s*empresa\s*\}\}|\{\{\s*organizacao\s*\}\}/gi)) missing.push('empresa');
+    if (missing.length > 0) {
+        toast(`Script "${script.title}" inserido. Faltou: ${missing.join(', ')}.`, 'warning');
+    } else {
+        toast(`Script "${script.title}" inserido. Revise e envie.`, 'info');
     }
 }
 
