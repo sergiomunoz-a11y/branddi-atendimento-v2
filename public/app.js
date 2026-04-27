@@ -3392,11 +3392,25 @@ async function sendOutbound() {
         // Fecha modal e vai para o inbox
         closeDealContactsModal();
         switchTab('inbox');
+
+        // Força filtro pra Prospecção (a conversa nova é desse tipo).
+        // Sem isso, se a aba ativa era "Inbound" ou "Todos", a conversa
+        // recém-criada cai fora do filtro e selectConversation falha silente.
+        currentTypeFilter = 'prospecting';
+        document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('type-tab-prospecting')?.classList.add('active');
+
         await loadInbox();
 
-        // Seleciona a conversa recem criada
+        // Seleciona a conversa recém criada (com fallback se ainda não estiver na lista)
         if (res.conversation_id) {
-            selectConversation(res.conversation_id);
+            const inList = allConversations.find(c => c.id === res.conversation_id);
+            if (inList) {
+                selectConversation(res.conversation_id);
+            } else {
+                // Pode acontecer se permissões filtraram fora; segura graciosamente
+                console.warn('Conversa criada não apareceu no inbox filtrado:', res.conversation_id);
+            }
         }
     } catch (err) {
         toast('Erro: ' + err.message, 'error');
